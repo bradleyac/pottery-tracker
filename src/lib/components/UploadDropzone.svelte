@@ -1,9 +1,9 @@
 <script lang="ts">
 	let {
-		onfile,
+		onfiles,
 		disabled = false
 	} = $props<{
-		onfile: (file: File) => void;
+		onfiles: (files: File[]) => void;
 		disabled?: boolean;
 	}>();
 
@@ -14,17 +14,17 @@
 		e.preventDefault();
 		dragging = false;
 		if (disabled) return;
-		const file = e.dataTransfer?.files[0];
-		if (file && file.type.startsWith('image/')) {
-			onfile(file);
-		}
+		const files = Array.from(e.dataTransfer?.files ?? []).filter((f) =>
+			f.type.startsWith('image/')
+		);
+		if (files.length > 0) onfiles(files);
 	}
 
 	function handleFileInput(e: Event) {
 		const target = e.target as HTMLInputElement;
-		const file = target.files?.[0];
-		if (file) onfile(file);
-		// Reset so same file can be re-selected
+		const files = Array.from(target.files ?? []);
+		if (files.length > 0) onfiles(files);
+		// Reset so same files can be re-selected
 		target.value = '';
 	}
 </script>
@@ -35,7 +35,7 @@
 	class:disabled
 	role="button"
 	tabindex={disabled ? -1 : 0}
-	aria-label="Upload pottery photo"
+	aria-label="Upload pottery photos"
 	ondragover={(e) => { e.preventDefault(); if (!disabled) dragging = true; }}
 	ondragleave={() => { dragging = false; }}
 	ondrop={handleDrop}
@@ -46,6 +46,7 @@
 		bind:this={fileInput}
 		type="file"
 		accept="image/*"
+		multiple
 		class="hidden-input"
 		onchange={handleFileInput}
 		{disabled}
@@ -53,8 +54,8 @@
 
 	<div class="dropzone-content">
 		<span class="dropzone-icon">📷</span>
-		<p class="dropzone-title">Drop a photo here</p>
-		<p class="dropzone-hint">or click to browse — JPEG, PNG, WebP</p>
+		<p class="dropzone-title">Drop photos here</p>
+		<p class="dropzone-hint">or click to browse — select one or multiple images</p>
 	</div>
 </div>
 

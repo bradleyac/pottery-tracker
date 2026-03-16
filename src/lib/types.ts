@@ -102,6 +102,48 @@ export interface Database {
 				};
 				Relationships: [];
 			};
+			pending_uploads: {
+				Row: {
+					id: string;
+					user_id: string;
+					temp_storage_path: string;
+					original_filename: string | null;
+					matched_piece_id: string | null;
+					confidence: number | null;
+					claude_reasoning: string | null;
+					suggested_name: string | null;
+					updated_description: string | null;
+					status: 'queued' | 'ready' | 'failed';
+					created_at: string;
+				};
+				Insert: {
+					id?: string;
+					user_id: string;
+					temp_storage_path: string;
+					original_filename?: string | null;
+					matched_piece_id?: string | null;
+					confidence?: number | null;
+					claude_reasoning?: string | null;
+					suggested_name?: string | null;
+					updated_description?: string | null;
+					status?: 'queued' | 'ready' | 'failed';
+					created_at?: string;
+				};
+				Update: {
+					id?: string;
+					user_id?: string;
+					temp_storage_path?: string;
+					original_filename?: string | null;
+					matched_piece_id?: string | null;
+					confidence?: number | null;
+					claude_reasoning?: string | null;
+					suggested_name?: string | null;
+					updated_description?: string | null;
+					status?: 'queued' | 'ready' | 'failed';
+					created_at?: string;
+				};
+				Relationships: [];
+			};
 		};
 		Views: Record<string, never>;
 		Functions: Record<
@@ -119,6 +161,7 @@ export interface Database {
 export type Piece = Database['public']['Tables']['pieces']['Row'];
 export type Image = Database['public']['Tables']['images']['Row'];
 export type PieceMatch = Database['public']['Tables']['piece_matches']['Row'];
+export type PendingUpload = Database['public']['Tables']['pending_uploads']['Row'];
 
 export type PieceWithCover = Piece & {
 	cover_url: string | null;
@@ -137,6 +180,12 @@ export type PieceSummary = {
 	id: string;
 	name: string;
 	cover_url: string | null;
+};
+
+export type PendingUploadWithUrls = PendingUpload & {
+	tempImageUrl: string;
+	matchedPieceCoverUrl: string | null;
+	matchedPieceName: string | null;
 };
 
 export type ClaudeMatchResult = {

@@ -1,9 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { createServiceRoleClient } from '$lib/server/supabase';
-import { uploadImage, deleteImage, buildStoragePath } from '$lib/server/storage';
-import { describeNewPiece } from '$lib/server/claude';
-import { randomUUID } from 'crypto';
+import { addImageToExistingPiece } from '$lib/server/pieces';
 
 // POST: attach a temp-uploaded image to an existing piece
 export const POST: RequestHandler = async ({
@@ -24,69 +21,16 @@ export const POST: RequestHandler = async ({
 
 	if (!tempPath) error(400, 'tempPath is required');
 
-	const supabase = createServiceRoleClient();
-
-	// Verify piece belongs to user
-	const { data: piece, error: pieceError } = await supabase
-		.from('pieces')
-		.select('id, user_id, cover_image_id, ai_description')
-		.eq('id', pieceId)
-		.eq('user_id', user.id)
-		.single();
-
-	if (pieceError || !piece) error(404, 'Piece not found');
-
-	// Download temp image
-	const { data: downloadData, error: downloadError } = await supabase.storage
-		.from('pottery-images')
-		.download(tempPath);
-
-	if (downloadError || !downloadData) error(500, 'Failed to read temp image');
-
-	const buffer = Buffer.from(await downloadData.arrayBuffer());
-
-	// Move to permanent path
-	const imageId = randomUUID();
-	const permanentPath = buildStoragePath(user.id, pieceId, imageId);
-
-	await uploadImage(buffer, permanentPath, 'image/jpeg');
-
 	try {
-		await deleteImage(tempPath);
-	} catch {
-		// Non-fatal
+		const result = await addImageToExistingPiece(
+			user.id,
+			pieceId,
+			tempPath,
+			notes ?? null,
+			updatedDescription ?? null
+		);
+		return json(result);
+	} catch (err) {
+		error(500, err instanceof Error ? err.message : 'Failed to save image');
 	}
-
-	// Insert image row
-	const isFirstImage = !piece.cover_image_id;
-	const { error: insertError } = await supabase.from('images').insert({
-		id: imageId,
-		piece_id: pieceId,
-		user_id: user.id,
-		storage_path: permanentPath,
-		notes: notes ?? null,
-		is_cover: isFirstImage
-	});
-
-	if (insertError) error(500, `Failed to save image: ${insertError.message}`);
-
-	const updates: Record<string, unknown> = {};
-
-	if (isFirstImage) {
-		updates.cover_image_id = imageId;
-	}
-
-	// Only generate a description if the piece doesn't have one yet.
-	// updatedDescription (from the upload matching call) is free — use it when present.
-	const needsDescription = !piece.ai_description;
-	if (needsDescription) {
-		const newDescription = updatedDescription ?? await describeNewPiece(buffer, 'image/jpeg').catch(() => null);
-		if (newDescription) updates.ai_description = newDescription;
-	}
-
-	if (Object.keys(updates).length > 0) {
-		await supabase.from('pieces').update(updates).eq('id', pieceId);
-	}
-
-	return json({ imageId, pieceId });
 };

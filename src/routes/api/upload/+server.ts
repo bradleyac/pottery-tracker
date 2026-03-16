@@ -1,8 +1,8 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { matchImageToPieces } from '$lib/server/claude';
-import { uploadImage, getSignedUrls } from '$lib/server/storage';
-import { createServiceRoleClient } from '$lib/server/supabase';
+import { uploadImage } from '$lib/server/storage';
+import { getExistingPiecesForMatching, getPieceCoverUrls } from '$lib/server/pieces';
 import { randomUUID } from 'crypto';
 
 export const POST: RequestHandler = async ({ request, locals: { safeGetSession } }) => {
@@ -31,52 +31,10 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 
 	await uploadImage(buffer, tempPath, mediaType);
 
-	// Fetch existing pieces
-	const supabase = createServiceRoleClient();
-	const { data: pieces } = await supabase
-		.from('pieces')
-		.select('id, name, ai_description, cover_image_id')
-		.eq('user_id', user.id)
-		.order('created_at', { ascending: false });
-
-	// Look up storage paths for cover images
-	const coverImageIds = (pieces ?? []).map((p) => p.cover_image_id).filter(Boolean) as string[];
-	const coverPathMap = new Map<string, string>();
-
-	if (coverImageIds.length > 0) {
-		const { data: coverImages } = await supabase
-			.from('images')
-			.select('id, storage_path')
-			.in('id', coverImageIds);
-
-		if (coverImages) {
-			for (const img of coverImages) {
-				coverPathMap.set(img.id, img.storage_path);
-			}
-		}
-	}
-
-	const existingPieces = (pieces ?? []).map((p) => ({
-		id: p.id,
-		name: p.name,
-		ai_description: p.ai_description ?? null,
-		cover_storage_path: p.cover_image_id ? (coverPathMap.get(p.cover_image_id) ?? null) : null
-	}));
-
+	const { existingPieces, coverPathMap } = await getExistingPiecesForMatching(user.id);
 	const matchResult = await matchImageToPieces(buffer, mediaType, existingPieces);
 
-	// Batch-sign all cover URLs
-	const coverPaths = existingPieces
-		.map((p) => p.cover_storage_path)
-		.filter((p): p is string => p !== null);
-	let coverUrlMap = new Map<string, string>();
-	if (coverPaths.length > 0) {
-		try {
-			coverUrlMap = await getSignedUrls(coverPaths);
-		} catch {
-			// Non-fatal
-		}
-	}
+	const coverUrlMap = await getPieceCoverUrls(existingPieces, coverPathMap);
 
 	const matchedPiece = matchResult.matchedPieceId
 		? existingPieces.find((p) => p.id === matchResult.matchedPieceId)

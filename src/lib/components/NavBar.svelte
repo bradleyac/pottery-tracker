@@ -2,7 +2,7 @@
 	import { enhance } from '$app/forms';
 	import type { User } from '@supabase/supabase-js';
 
-	let { user } = $props<{ user: User | null }>();
+	let { user, pendingCount = 0 } = $props<{ user: User | null; pendingCount?: number }>();
 </script>
 
 <nav class="navbar">
@@ -15,6 +15,12 @@
 		<div class="nav-links">
 			<a href="/" class="nav-link">My Pieces</a>
 			<a href="/upload" class="nav-link upload-btn">+ Upload Photo</a>
+			{#if pendingCount > 0}
+				<a href="/review" class="nav-link review-link">
+					Review
+					<span class="review-badge">{pendingCount}</span>
+				</a>
+			{/if}
 		</div>
 
 		<div class="nav-user">
@@ -88,6 +94,22 @@
 
 	.upload-btn:hover {
 		background: #a8521f !important;
+	}
+
+	.review-link {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+	}
+
+	.review-badge {
+		background: #c0622c;
+		color: white;
+		font-size: 0.6875rem;
+		font-weight: 700;
+		border-radius: 10px;
+		padding: 0.1rem 0.4rem;
+		line-height: 1.4;
 	}
 
 	.nav-user {

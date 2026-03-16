@@ -7,7 +7,7 @@
 
 <div class="app">
 	{#if data.session}
-		<NavBar user={data.user} />
+		<NavBar user={data.user} pendingCount={data.pendingCount} />
 	{/if}
 
 	<main class="main-content">

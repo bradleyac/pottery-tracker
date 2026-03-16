@@ -5,7 +5,7 @@
 	import type { MatchResultWithPiece, PieceSummary } from '$lib/types';
 	import { goto } from '$app/navigation';
 
-	type Step = 'idle' | 'uploading' | 'ai_thinking' | 'confirming' | 'saving' | 'done';
+	type Step = 'idle' | 'uploading' | 'ai_thinking' | 'confirming' | 'saving' | 'done' | 'bulk_uploading';
 
 	let step = $state<Step>('idle');
 	let errorMsg = $state<string | null>(null);
@@ -14,13 +14,22 @@
 	let matchResult = $state<MatchResultWithPiece | null>(null);
 	let allPieces = $state<PieceSummary[]>([]);
 	let savedPieceId = $state<string | null>(null);
+	let bulkCount = $state(0);
 
-	async function handleFile(file: File) {
+	async function handleFiles(files: File[]) {
 		errorMsg = null;
+
+		if (files.length === 1) {
+			await handleSingleFile(files[0]);
+		} else {
+			await handleBulkFiles(files);
+		}
+	}
+
+	async function handleSingleFile(file: File) {
 		previewUrl = URL.createObjectURL(file);
 		step = 'uploading';
 
-		// Upload image and run Claude matching
 		const formData = new FormData();
 		formData.append('image', file);
 
@@ -62,6 +71,34 @@
 		step = 'confirming';
 	}
 
+	async function handleBulkFiles(files: File[]) {
+		bulkCount = files.length;
+		step = 'bulk_uploading';
+
+		const formData = new FormData();
+		for (const file of files) {
+			formData.append('images[]', file);
+		}
+
+		let resp: Response;
+		try {
+			resp = await fetch('/api/bulk-upload', { method: 'POST', body: formData });
+		} catch {
+			errorMsg = 'Network error during upload. Please try again.';
+			step = 'idle';
+			return;
+		}
+
+		if (!resp.ok) {
+			const txt = await resp.text().catch(() => '');
+			errorMsg = `Upload failed: ${txt || resp.statusText}`;
+			step = 'idle';
+			return;
+		}
+
+		await goto('/review');
+	}
+
 	async function handleConfirm(
 		action: 'accepted' | 'overridden' | 'new_piece',
 		data: ConfirmData
@@ -88,7 +125,6 @@
 				const result = await resp.json();
 				pieceId = result.pieceId;
 			} else {
-				// accepted or overridden — add image to existing piece
 				const targetPieceId = action === 'accepted' ? matchResult.matchedPieceId! : data.pieceId!;
 				const resp = await fetch(`/api/pieces/${targetPieceId}/images`, {
 					method: 'POST',
@@ -131,6 +167,7 @@
 		matchResult = null;
 		errorMsg = null;
 		savedPieceId = null;
+		bulkCount = 0;
 	}
 </script>
 
@@ -140,8 +177,8 @@
 
 <div class="upload-page">
 	<div class="page-header">
-		<h1>Upload a Photo</h1>
-		<p>Claude will identify your piece or create a new one</p>
+		<h1>Upload Photos</h1>
+		<p>Select one photo for instant review, or multiple to analyze in the background</p>
 	</div>
 
 	{#if errorMsg}
@@ -149,7 +186,7 @@
 	{/if}
 
 	{#if step === 'idle'}
-		<UploadDropzone onfile={handleFile} />
+		<UploadDropzone onfiles={handleFiles} />
 
 	{:else if step === 'uploading'}
 		<div class="status-card">
@@ -167,6 +204,13 @@
 			{#if previewUrl}
 				<img src={previewUrl} alt="Preview" class="upload-preview" />
 			{/if}
+		</div>
+
+	{:else if step === 'bulk_uploading'}
+		<div class="status-card">
+			<div class="spinner"></div>
+			<p>Uploading {bulkCount} photo{bulkCount !== 1 ? 's' : ''}…</p>
+			<p class="status-sub">Claude will analyze them in the background. You'll be redirected to review.</p>
 		</div>
 
 	{:else if step === 'confirming' && matchResult && previewUrl}
@@ -246,6 +290,12 @@
 		font-size: 1rem;
 	}
 
+	.status-sub {
+		font-size: 0.875rem !important;
+		color: #9a7060 !important;
+		max-width: 360px;
+	}
+
 	.upload-preview {
 		width: 200px;
 		height: 200px;
@@ -321,9 +371,7 @@
 		transition: background 0.15s;
 	}
 
-	.btn-primary:hover {
-		background: #a8521f;
-	}
+	.btn-primary:hover { background: #a8521f; }
 
 	.btn-secondary {
 		display: block;
@@ -351,7 +399,5 @@
 		font-size: 0.875rem;
 	}
 
-	.btn-ghost:hover {
-		color: #4a3728;
-	}
+	.btn-ghost:hover { color: #4a3728; }
 </style>
