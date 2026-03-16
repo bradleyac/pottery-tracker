@@ -2,10 +2,17 @@
 	import ImageGallery from '$lib/components/ImageGallery.svelte';
 	import type { PageData } from './$types';
 	import { formatDate } from '$lib/utils';
+	import { invalidateAll } from '$app/navigation';
 
 	let { data } = $props<{ data: PageData }>();
 
 	let { piece } = $derived(data);
+
+	async function handleDeleteImage(imageId: string) {
+		const resp = await fetch(`/api/images/${imageId}`, { method: 'DELETE' });
+		if (!resp.ok) throw new Error(await resp.text());
+		await invalidateAll();
+	}
 </script>
 
 <svelte:head>
@@ -51,7 +58,7 @@
 	{:else}
 		<section class="timeline-section">
 			<h2>Photo Timeline</h2>
-			<ImageGallery images={piece.images} />
+			<ImageGallery images={piece.images} ondelete={handleDeleteImage} />
 		</section>
 	{/if}
 </div>

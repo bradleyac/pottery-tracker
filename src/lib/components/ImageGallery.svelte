@@ -2,9 +2,14 @@
 	import type { ImageWithUrl } from '$lib/types';
 	import { formatDate } from '$lib/utils';
 
-	let { images } = $props<{ images: ImageWithUrl[] }>();
+	let { images, ondelete = null } = $props<{
+		images: ImageWithUrl[];
+		ondelete?: ((imageId: string) => Promise<void>) | null;
+	}>();
 
 	let lightboxIndex = $state<number | null>(null);
+	let confirmingId = $state<string | null>(null);
+	let deletingId = $state<string | null>(null);
 
 	function openLightbox(index: number) {
 		lightboxIndex = index;
@@ -30,6 +35,17 @@
 		if (e.key === 'ArrowLeft') prevImage();
 		if (e.key === 'ArrowRight') nextImage();
 	}
+
+	async function confirmDelete(imageId: string) {
+		if (!ondelete) return;
+		deletingId = imageId;
+		try {
+			await ondelete(imageId);
+		} finally {
+			deletingId = null;
+			confirmingId = null;
+		}
+	}
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -37,13 +53,37 @@
 <div class="gallery">
 	{#each images as image, i (image.id)}
 		<div class="gallery-item">
-			<button class="image-btn" onclick={() => openLightbox(i)}>
-				<img src={image.url} alt="Pottery photo {i + 1}" loading="lazy" />
-			</button>
+			<div class="image-wrapper">
+				<button class="image-btn" onclick={() => openLightbox(i)}>
+					<img src={image.url} alt="Pottery photo {i + 1}" loading="lazy" />
+				</button>
+				{#if ondelete}
+					<button
+						class="delete-btn"
+						onclick={() => (confirmingId = image.id)}
+						aria-label="Delete photo"
+						title="Delete photo"
+					>✕</button>
+				{/if}
+			</div>
 			<div class="image-meta">
-				<span class="image-date">{formatDate(image.uploaded_at)}</span>
-				{#if image.notes}
-					<span class="image-notes">{image.notes}</span>
+				{#if confirmingId === image.id}
+					<span class="confirm-text">Delete this photo?</span>
+					<div class="confirm-actions">
+						<button
+							class="confirm-yes"
+							onclick={() => confirmDelete(image.id)}
+							disabled={deletingId === image.id}
+						>
+							{deletingId === image.id ? 'Deleting…' : 'Yes, delete'}
+						</button>
+						<button class="confirm-no" onclick={() => (confirmingId = null)}>Cancel</button>
+					</div>
+				{:else}
+					<span class="image-date">{formatDate(image.uploaded_at)}</span>
+					{#if image.notes}
+						<span class="image-notes">{image.notes}</span>
+					{/if}
 				{/if}
 			</div>
 		</div>
@@ -110,16 +150,21 @@
 		gap: 0.5rem;
 	}
 
+	.image-wrapper {
+		position: relative;
+		border-radius: 8px;
+		overflow: hidden;
+		aspect-ratio: 1;
+	}
+
 	.image-btn {
 		background: none;
 		border: none;
 		padding: 0;
-		border-radius: 8px;
-		overflow: hidden;
 		cursor: pointer;
-		aspect-ratio: 1;
 		display: block;
 		width: 100%;
+		height: 100%;
 	}
 
 	.image-btn img {
@@ -134,10 +179,39 @@
 		transform: scale(1.04);
 	}
 
+	.delete-btn {
+		position: absolute;
+		top: 0.4rem;
+		right: 0.4rem;
+		width: 26px;
+		height: 26px;
+		border-radius: 50%;
+		border: none;
+		background: rgba(0, 0, 0, 0.55);
+		color: white;
+		font-size: 0.75rem;
+		line-height: 1;
+		cursor: pointer;
+		opacity: 0;
+		transition: opacity 0.15s, background 0.15s;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.image-wrapper:hover .delete-btn {
+		opacity: 1;
+	}
+
+	.delete-btn:hover {
+		background: rgba(180, 30, 30, 0.85);
+	}
+
 	.image-meta {
 		display: flex;
 		flex-direction: column;
 		gap: 0.125rem;
+		min-height: 2rem;
 	}
 
 	.image-date {
@@ -149,6 +223,43 @@
 		font-size: 0.75rem;
 		color: #a08070;
 		font-style: italic;
+	}
+
+	.confirm-text {
+		font-size: 0.75rem;
+		color: #7a1010;
+		font-weight: 500;
+	}
+
+	.confirm-actions {
+		display: flex;
+		gap: 0.5rem;
+		align-items: center;
+	}
+
+	.confirm-yes {
+		font-size: 0.75rem;
+		padding: 0.2rem 0.5rem;
+		background: #b91c1c;
+		color: white;
+		border: none;
+		border-radius: 4px;
+		cursor: pointer;
+	}
+
+	.confirm-yes:disabled {
+		opacity: 0.6;
+		cursor: default;
+	}
+
+	.confirm-no {
+		font-size: 0.75rem;
+		padding: 0.2rem 0.5rem;
+		background: none;
+		border: 1px solid #d4c4b8;
+		border-radius: 4px;
+		color: #5a4035;
+		cursor: pointer;
 	}
 
 	/* Lightbox */
