@@ -2,7 +2,7 @@
 	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
 	import MatchConfirmDialog from '$lib/components/MatchConfirmDialog.svelte';
 	import type { ConfirmData } from '$lib/components/MatchConfirmDialog.svelte';
-	import type { MatchResultWithPiece, Piece } from '$lib/types';
+	import type { MatchResultWithPiece, PieceSummary } from '$lib/types';
 	import { goto } from '$app/navigation';
 
 	type Step = 'idle' | 'uploading' | 'ai_thinking' | 'confirming' | 'saving' | 'done';
@@ -12,7 +12,7 @@
 
 	let previewUrl = $state<string | null>(null);
 	let matchResult = $state<MatchResultWithPiece | null>(null);
-	let allPieces = $state<Piece[]>([]);
+	let allPieces = $state<PieceSummary[]>([]);
 	let savedPieceId = $state<string | null>(null);
 
 	async function handleFile(file: File) {
@@ -53,7 +53,11 @@
 			updatedDescription: data.updatedDescription,
 			storagePath: data.tempPath
 		};
-		allPieces = data.pieces ?? [];
+		allPieces = (data.pieces ?? []).map((p: { id: string; name: string; cover_url?: string | null }) => ({
+			id: p.id,
+			name: p.name,
+			cover_url: p.cover_url ?? null
+		}));
 
 		step = 'confirming';
 	}

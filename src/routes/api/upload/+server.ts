@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { matchImageToPieces } from '$lib/server/claude';
-import { uploadImage, getSignedUrl } from '$lib/server/storage';
+import { uploadImage, getSignedUrls } from '$lib/server/storage';
 import { createServiceRoleClient } from '$lib/server/supabase';
 import { randomUUID } from 'crypto';
 
@@ -65,18 +65,27 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 
 	const matchResult = await matchImageToPieces(buffer, mediaType, existingPieces);
 
+	// Batch-sign all cover URLs
+	const coverPaths = existingPieces
+		.map((p) => p.cover_storage_path)
+		.filter((p): p is string => p !== null);
+	let coverUrlMap = new Map<string, string>();
+	if (coverPaths.length > 0) {
+		try {
+			coverUrlMap = await getSignedUrls(coverPaths);
+		} catch {
+			// Non-fatal
+		}
+	}
+
 	const matchedPiece = matchResult.matchedPieceId
 		? existingPieces.find((p) => p.id === matchResult.matchedPieceId)
 		: null;
 
-	let matchedPieceCoverUrl: string | null = null;
-	if (matchedPiece?.cover_storage_path) {
-		try {
-			matchedPieceCoverUrl = await getSignedUrl(matchedPiece.cover_storage_path);
-		} catch {
-			// Non-fatal — dialog will just skip the cover image
-		}
-	}
+	const matchedPieceCoverUrl =
+		matchedPiece?.cover_storage_path
+			? (coverUrlMap.get(matchedPiece.cover_storage_path) ?? null)
+			: null;
 
 	return json({
 		tempPath,
@@ -87,6 +96,10 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 		reasoning: matchResult.reasoning,
 		suggestedName: matchResult.suggestedName,
 		updatedDescription: matchResult.updatedDescription,
-		pieces: existingPieces.map((p) => ({ id: p.id, name: p.name }))
+		pieces: existingPieces.map((p) => ({
+			id: p.id,
+			name: p.name,
+			cover_url: p.cover_storage_path ? (coverUrlMap.get(p.cover_storage_path) ?? null) : null
+		}))
 	});
 };

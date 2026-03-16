@@ -132,6 +132,13 @@ export type PieceWithImages = Piece & {
 	images: ImageWithUrl[];
 };
 
+// Minimal piece info used in upload/confirm flows
+export type PieceSummary = {
+	id: string;
+	name: string;
+	cover_url: string | null;
+};
+
 export type ClaudeMatchResult = {
 	matchedPieceId: string | null;
 	confidence: number;

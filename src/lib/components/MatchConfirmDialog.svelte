@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { MatchResultWithPiece, Piece } from '$lib/types';
+	import type { MatchResultWithPiece, PieceSummary } from '$lib/types';
 	import { confidenceLabel, confidenceColor } from '$lib/utils';
 
 	let {
@@ -10,7 +10,7 @@
 	} = $props<{
 		previewUrl: string;
 		matchResult: MatchResultWithPiece;
-		pieces: Piece[];
+		pieces: PieceSummary[];
 		onconfirm: (action: 'accepted' | 'overridden' | 'new_piece', data: ConfirmData) => void;
 	}>();
 
@@ -121,12 +121,22 @@
 
 				{:else if mode === 'choose_piece'}
 					<h3>Choose a piece</h3>
-					<select bind:value={selectedPieceId} class="piece-select">
-						<option value="">— Select a piece —</option>
+					<div class="piece-picker">
 						{#each pieces as piece (piece.id)}
-							<option value={piece.id}>{piece.name}</option>
+							<button
+								class="piece-option"
+								class:selected={selectedPieceId === piece.id}
+								onclick={() => (selectedPieceId = piece.id)}
+							>
+								{#if piece.cover_url}
+									<img src={piece.cover_url} alt={piece.name} class="piece-option-img" />
+								{:else}
+									<div class="piece-option-placeholder"></div>
+								{/if}
+								<span class="piece-option-name">{piece.name}</span>
+							</button>
 						{/each}
-					</select>
+					</div>
 
 					<div class="actions">
 						<button
@@ -304,7 +314,61 @@
 		margin-top: auto;
 	}
 
-	.piece-select,
+	.piece-picker {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 0.5rem;
+		max-height: 260px;
+		overflow-y: auto;
+	}
+
+	.piece-option {
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 0;
+		background: white;
+		border: 1.5px solid #e0d5cc;
+		border-radius: 8px;
+		padding: 0;
+		cursor: pointer;
+		overflow: hidden;
+		text-align: left;
+		transition: border-color 0.15s;
+	}
+
+	.piece-option:hover {
+		border-color: #c0622c;
+	}
+
+	.piece-option.selected {
+		border-color: #c0622c;
+		box-shadow: 0 0 0 2px rgba(192, 98, 44, 0.25);
+	}
+
+	.piece-option-img,
+	.piece-option-placeholder {
+		width: 100%;
+		aspect-ratio: 1;
+		object-fit: cover;
+		display: block;
+	}
+
+	.piece-option-placeholder {
+		background: #f0ebe4;
+	}
+
+	.piece-option-name {
+		padding: 0.375rem 0.5rem;
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: #2c1810;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		border-top: 1px solid #f0ebe4;
+	}
+
 	.name-input {
 		width: 100%;
 		padding: 0.625rem 0.875rem;
@@ -316,7 +380,6 @@
 		outline: none;
 	}
 
-	.piece-select:focus,
 	.name-input:focus {
 		border-color: #c0622c;
 	}
