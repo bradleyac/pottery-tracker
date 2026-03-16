@@ -1,13 +1,8 @@
 <script lang="ts">
 	import type { MatchResultWithPiece, PieceSummary } from '$lib/types';
-	import { confidenceLabel, confidenceColor } from '$lib/utils';
+	import { confidenceColor, confidenceLabel } from '$lib/utils';
 
-	let {
-		previewUrl,
-		matchResult,
-		pieces,
-		onconfirm
-	} = $props<{
+	let { previewUrl, matchResult, pieces, onconfirm } = $props<{
 		previewUrl: string;
 		matchResult: MatchResultWithPiece;
 		pieces: PieceSummary[];
@@ -27,9 +22,7 @@
 	let newPieceName = $state(matchResult.suggestedName ?? '');
 	let notes = $state('');
 
-	const isMatch = $derived(
-		matchResult.matchedPieceId !== null && matchResult.confidence >= 0.6
-	);
+	const isMatch = $derived(matchResult.matchedPieceId !== null && matchResult.confidence >= 0.6);
 
 	function acceptMatch() {
 		onconfirm('accepted', { pieceId: matchResult.matchedPieceId!, notes });
@@ -73,7 +66,9 @@
 								style="background: {confidenceColor(matchResult.confidence)}"
 							></div>
 							<span
-								>{confidenceLabel(matchResult.confidence)} match ({Math.round(matchResult.confidence * 100)}%)</span
+								>{confidenceLabel(matchResult.confidence)} match ({Math.round(
+									matchResult.confidence * 100
+								)}%)</span
 							>
 						</div>
 
@@ -118,7 +113,6 @@
 							{/if}
 						</div>
 					{/if}
-
 				{:else if mode === 'choose_piece'}
 					<h3>Choose a piece</h3>
 					<div class="piece-picker">
@@ -139,16 +133,11 @@
 					</div>
 
 					<div class="actions">
-						<button
-							class="btn-primary"
-							onclick={confirmOverride}
-							disabled={!selectedPieceId}
-						>
+						<button class="btn-primary" onclick={confirmOverride} disabled={!selectedPieceId}>
 							Assign to this piece
 						</button>
 						<button class="btn-ghost" onclick={() => (mode = 'review')}>Back</button>
 					</div>
-
 				{:else}
 					<h3>Name this piece</h3>
 					<input
@@ -160,11 +149,7 @@
 					/>
 
 					<div class="actions">
-						<button
-							class="btn-primary"
-							onclick={confirmNew}
-							disabled={!newPieceName.trim()}
-						>
+						<button class="btn-primary" onclick={confirmNew} disabled={!newPieceName.trim()}>
 							Create new piece
 						</button>
 						<button class="btn-ghost" onclick={() => (mode = 'review')}>Back</button>
@@ -317,8 +302,9 @@
 	.piece-picker {
 		display: grid;
 		grid-template-columns: repeat(2, 1fr);
+		grid-auto-rows: 130px;
 		gap: 0.5rem;
-		max-height: 260px;
+		max-height: 280px;
 		overflow-y: auto;
 	}
 
@@ -349,7 +335,8 @@
 	.piece-option-img,
 	.piece-option-placeholder {
 		width: 100%;
-		aspect-ratio: 1;
+		flex: 1;
+		min-height: 0;
 		object-fit: cover;
 		display: block;
 	}
