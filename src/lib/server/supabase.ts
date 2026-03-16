@@ -2,13 +2,11 @@ import { createServerClient } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
 import type { RequestEvent } from '@sveltejs/kit';
 import type { Database } from '$lib/types';
-
-const supabaseUrl = process.env.PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.PUBLIC_SUPABASE_ANON_KEY!;
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
+import { env } from '$env/dynamic/private';
 
 export function createSupabaseServerClient(event: RequestEvent) {
-	return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
+	return createServerClient<Database>(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
 		cookies: {
 			getAll() {
 				return event.cookies.getAll();
@@ -22,9 +20,9 @@ export function createSupabaseServerClient(event: RequestEvent) {
 	});
 }
 
-// Service-role client for server-side operations (storage, admin queries)
+// Service-role client — uses dynamic env so runtime vars are always current
 export function createServiceRoleClient() {
-	return createClient<Database>(supabaseUrl, supabaseServiceRoleKey, {
+	return createClient<Database>(PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
 		auth: {
 			autoRefreshToken: false,
 			persistSession: false

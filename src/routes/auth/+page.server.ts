@@ -26,7 +26,7 @@ export const actions: Actions = {
 		redirect(303, '/');
 	},
 
-	signup: async ({ request, locals: { supabase } }) => {
+	signup: async ({ request, url, locals: { supabase } }) => {
 		const data = await request.formData();
 		const email = data.get('email') as string;
 		const password = data.get('password') as string;
@@ -43,7 +43,7 @@ export const actions: Actions = {
 			email,
 			password,
 			options: {
-				emailRedirectTo: `${process.env.PUBLIC_SITE_URL ?? 'http://localhost:5173'}/auth/callback`
+				emailRedirectTo: `${url.origin}/auth/callback`
 			}
 		});
 

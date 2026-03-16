@@ -1,10 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { ClaudeMatchResult } from '$lib/types';
 import { getSignedUrl } from './storage';
+import { env } from '$env/dynamic/private';
 
-const client = new Anthropic({
-	apiKey: process.env.ANTHROPIC_API_KEY
-});
+function getClient() {
+	return new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+}
 
 const MODEL = 'claude-sonnet-4-6';
 
@@ -132,7 +133,7 @@ export async function matchImageToPieces(
 		text: `\nExisting pieces:\n${piecesText}\n\nDoes the new photo match any existing piece? Return only JSON.`
 	});
 
-	const response = await client.messages.create({
+	const response = await getClient().messages.create({
 		model: MODEL,
 		max_tokens: 1024,
 		system: MATCH_SYSTEM_PROMPT,
@@ -160,7 +161,7 @@ export async function describeNewPiece(
 ): Promise<string> {
 	const base64Image = imageBuffer.toString('base64');
 
-	const response = await client.messages.create({
+	const response = await getClient().messages.create({
 		model: MODEL,
 		max_tokens: 512,
 		messages: [
