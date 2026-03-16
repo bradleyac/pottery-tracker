@@ -1,8 +1,6 @@
-create extension if not exists "uuid-ossp";
-
 -- Pieces table
 create table public.pieces (
-  id              uuid primary key default uuid_generate_v4(),
+  id              uuid primary key default gen_random_uuid(),
   user_id         uuid not null references auth.users(id) on delete cascade,
   name            text not null,
   description     text,
@@ -14,7 +12,7 @@ create table public.pieces (
 
 -- Images table
 create table public.images (
-  id           uuid primary key default uuid_generate_v4(),
+  id           uuid primary key default gen_random_uuid(),
   piece_id     uuid not null references public.pieces(id) on delete cascade,
   user_id      uuid not null references auth.users(id) on delete cascade,
   storage_path text not null,
@@ -30,7 +28,7 @@ alter table public.pieces add constraint pieces_cover_image_id_fkey
 
 -- Piece match audit log
 create table public.piece_matches (
-  id                  uuid primary key default uuid_generate_v4(),
+  id                  uuid primary key default gen_random_uuid(),
   user_id             uuid not null references auth.users(id) on delete cascade,
   candidate_path      text not null,
   suggested_piece_id  uuid references public.pieces(id) on delete set null,
