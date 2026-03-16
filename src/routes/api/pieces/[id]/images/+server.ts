@@ -29,7 +29,7 @@ export const POST: RequestHandler = async ({
 	// Verify piece belongs to user
 	const { data: piece, error: pieceError } = await supabase
 		.from('pieces')
-		.select('id, user_id, cover_image_id')
+		.select('id, user_id, cover_image_id, ai_description')
 		.eq('id', pieceId)
 		.eq('user_id', user.id)
 		.single();
@@ -70,24 +70,18 @@ export const POST: RequestHandler = async ({
 
 	if (insertError) error(500, `Failed to save image: ${insertError.message}`);
 
-	// Update piece: set cover if first image, refresh ai_description
 	const updates: Record<string, unknown> = {};
 
 	if (isFirstImage) {
 		updates.cover_image_id = imageId;
 	}
 
-	// Regenerate AI description with latest image
-	let newDescription = updatedDescription ?? null;
-	if (!newDescription) {
-		try {
-			newDescription = await describeNewPiece(buffer, 'image/jpeg');
-		} catch {
-			// Non-fatal
-		}
-	}
-	if (newDescription) {
-		updates.ai_description = newDescription;
+	// Only generate a description if the piece doesn't have one yet.
+	// updatedDescription (from the upload matching call) is free — use it when present.
+	const needsDescription = !piece.ai_description;
+	if (needsDescription) {
+		const newDescription = updatedDescription ?? await describeNewPiece(buffer, 'image/jpeg').catch(() => null);
+		if (newDescription) updates.ai_description = newDescription;
 	}
 
 	if (Object.keys(updates).length > 0) {

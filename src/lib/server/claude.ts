@@ -1,13 +1,15 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { ClaudeMatchResult } from '$lib/types';
-import { getSignedUrl } from './storage';
 import { env } from '$env/dynamic/private';
+
+// Sonnet for matching (needs vision + reasoning)
+// Haiku for descriptions (simple task, ~10x cheaper)
+const MATCH_MODEL = 'claude-sonnet-4-6';
+const DESCRIBE_MODEL = 'claude-haiku-4-5-20251001';
 
 function getClient() {
 	return new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
 }
-
-const MODEL = 'claude-sonnet-4-6';
 
 const MATCH_SYSTEM_PROMPT = `You are an expert pottery analyst helping potters track their ceramic pieces over time.
 Your task is to determine whether a new photo shows an existing piece or a new one.
@@ -50,59 +52,35 @@ export type ExistingPiece = {
 	cover_storage_path?: string | null;
 };
 
+type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
+
 export async function matchImageToPieces(
 	imageBuffer: Buffer,
-	mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
+	mediaType: ImageMediaType,
 	existingPieces: ExistingPiece[]
 ): Promise<ClaudeMatchResult> {
-	// Build text description of existing pieces
-	const piecesText =
-		existingPieces.length === 0
-			? 'No existing pieces yet.'
-			: existingPieces
-					.map(
-						(p, i) =>
-							`${i + 1}. ID: ${p.id}\n   Name: ${p.name}\n   Description: ${p.ai_description ?? 'No description yet'}`
-					)
-					.join('\n\n');
-
-	type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
-
-	// Gather up to 3 reference images (cover images of existing pieces)
-	const referenceImages: Array<{
-		type: 'image';
-		source: { type: 'base64'; media_type: ImageMediaType; data: string };
-	}> = [];
-
-	const piecesWithCovers = existingPieces.filter((p) => p.cover_storage_path).slice(0, 3);
-
-	for (const piece of piecesWithCovers) {
-		try {
-			const signedUrl = await getSignedUrl(piece.cover_storage_path!);
-			const response = await fetch(signedUrl);
-			if (response.ok) {
-				const arrayBuffer = await response.arrayBuffer();
-				const base64 = Buffer.from(arrayBuffer).toString('base64');
-				const rawContentType = response.headers.get('content-type') || 'image/jpeg';
-				const contentType = (['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(rawContentType)
-					? rawContentType
-					: 'image/jpeg') as ImageMediaType;
-				referenceImages.push({
-					type: 'image',
-					source: {
-						type: 'base64',
-						media_type: contentType,
-						data: base64
-					}
-				});
-			}
-		} catch {
-			// Skip reference images that fail to load
-		}
+	// No existing pieces → skip Claude entirely, just describe
+	if (existingPieces.length === 0) {
+		const description = await describeNewPiece(imageBuffer, mediaType);
+		return {
+			matchedPieceId: null,
+			confidence: 0,
+			reasoning: 'No existing pieces to match against.',
+			suggestedName: 'New Piece',
+			updatedDescription: description
+		};
 	}
+
+	const piecesText = existingPieces
+		.map(
+			(p, i) =>
+				`${i + 1}. ID: ${p.id}\n   Name: ${p.name}\n   Description: ${p.ai_description ?? 'No description yet'}`
+		)
+		.join('\n\n');
 
 	const base64Image = imageBuffer.toString('base64');
 
+	// Text-only matching: descriptions are rich enough, reference images are very expensive
 	const userContent: Anthropic.MessageParam['content'] = [
 		{
 			type: 'text',
@@ -110,32 +88,17 @@ export async function matchImageToPieces(
 		},
 		{
 			type: 'image',
-			source: {
-				type: 'base64',
-				media_type: mediaType,
-				data: base64Image
-			}
+			source: { type: 'base64', media_type: mediaType, data: base64Image }
+		},
+		{
+			type: 'text',
+			text: `\nExisting pieces (match against their text descriptions):\n${piecesText}\n\nDoes the new photo match any existing piece? Return only JSON.`
 		}
 	];
 
-	if (referenceImages.length > 0) {
-		userContent.push({
-			type: 'text',
-			text: `\nHere are reference photos of existing pieces (in the same order as the list below):`
-		});
-		for (const img of referenceImages) {
-			userContent.push(img);
-		}
-	}
-
-	userContent.push({
-		type: 'text',
-		text: `\nExisting pieces:\n${piecesText}\n\nDoes the new photo match any existing piece? Return only JSON.`
-	});
-
 	const response = await getClient().messages.create({
-		model: MODEL,
-		max_tokens: 1024,
+		model: MATCH_MODEL,
+		max_tokens: 512,
 		system: MATCH_SYSTEM_PROMPT,
 		messages: [{ role: 'user', content: userContent }]
 	});
@@ -157,13 +120,13 @@ export async function matchImageToPieces(
 
 export async function describeNewPiece(
 	imageBuffer: Buffer,
-	mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'
+	mediaType: ImageMediaType
 ): Promise<string> {
 	const base64Image = imageBuffer.toString('base64');
 
 	const response = await getClient().messages.create({
-		model: MODEL,
-		max_tokens: 512,
+		model: DESCRIBE_MODEL,
+		max_tokens: 256,
 		messages: [
 			{
 				role: 'user',
@@ -185,7 +148,6 @@ export async function describeNewPiece(
 }
 
 function parseClaudeJson(text: string): ClaudeMatchResult {
-	// Strip markdown code fences if present
 	const cleaned = text.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim();
 
 	try {
@@ -198,7 +160,6 @@ function parseClaudeJson(text: string): ClaudeMatchResult {
 			updatedDescription: parsed.updatedDescription ?? ''
 		};
 	} catch {
-		// Fallback: treat as new piece
 		return {
 			matchedPieceId: null,
 			confidence: 0,
