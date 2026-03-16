@@ -46,6 +46,7 @@
 		matchResult = {
 			matchedPieceId: data.matchedPieceId,
 			matchedPieceName: data.matchedPieceName,
+			matchedPieceCoverUrl: data.matchedPieceCoverUrl ?? null,
 			confidence: data.confidence,
 			reasoning: data.reasoning,
 			suggestedName: data.suggestedName,

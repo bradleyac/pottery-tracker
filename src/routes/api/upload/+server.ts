@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { matchImageToPieces } from '$lib/server/claude';
-import { uploadImage } from '$lib/server/storage';
+import { uploadImage, getSignedUrl } from '$lib/server/storage';
 import { createServiceRoleClient } from '$lib/server/supabase';
 import { randomUUID } from 'crypto';
 
@@ -69,10 +69,20 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 		? existingPieces.find((p) => p.id === matchResult.matchedPieceId)
 		: null;
 
+	let matchedPieceCoverUrl: string | null = null;
+	if (matchedPiece?.cover_storage_path) {
+		try {
+			matchedPieceCoverUrl = await getSignedUrl(matchedPiece.cover_storage_path);
+		} catch {
+			// Non-fatal — dialog will just skip the cover image
+		}
+	}
+
 	return json({
 		tempPath,
 		matchedPieceId: matchResult.matchedPieceId,
 		matchedPieceName: matchedPiece?.name ?? null,
+		matchedPieceCoverUrl,
 		confidence: matchResult.confidence,
 		reasoning: matchResult.reasoning,
 		suggestedName: matchResult.suggestedName,

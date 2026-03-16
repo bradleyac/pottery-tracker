@@ -142,5 +142,6 @@ export type ClaudeMatchResult = {
 
 export type MatchResultWithPiece = ClaudeMatchResult & {
 	matchedPieceName?: string;
+	matchedPieceCoverUrl?: string | null;
 	storagePath: string;
 };

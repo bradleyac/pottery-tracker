@@ -80,6 +80,13 @@
 						<p class="match-title">
 							Looks like <strong>{matchResult.matchedPieceName ?? 'an existing piece'}</strong>
 						</p>
+						{#if matchResult.matchedPieceCoverUrl}
+							<img
+								src={matchResult.matchedPieceCoverUrl}
+								alt="Cover photo of {matchResult.matchedPieceName}"
+								class="cover-preview"
+							/>
+						{/if}
 						<p class="match-reasoning">{matchResult.reasoning}</p>
 
 						<div class="actions">
@@ -274,6 +281,14 @@
 		font-size: 1rem;
 		color: #2c1810;
 		line-height: 1.4;
+	}
+
+	.cover-preview {
+		width: 100%;
+		aspect-ratio: 1;
+		object-fit: cover;
+		border-radius: 8px;
+		border: 1.5px solid #e0d5cc;
 	}
 
 	.match-reasoning {
