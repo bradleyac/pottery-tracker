@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import sharp from 'sharp';
 import type { ClaudeMatchResult } from '$lib/types';
 import { env } from '$env/dynamic/private';
 
@@ -54,6 +55,17 @@ export type ExistingPiece = {
 
 type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
 
+// Resize to at most 1024px on the longest side before sending to Claude.
+// Originals are stored at full resolution; only the API payload is shrunk.
+// A typical phone photo at 4000px costs ~4000 tokens; at 1024px it's ~400.
+async function resizeForClaude(buffer: Buffer): Promise<{ data: string; mediaType: 'image/jpeg' }> {
+	const resized = await sharp(buffer)
+		.resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
+		.jpeg({ quality: 82 })
+		.toBuffer();
+	return { data: resized.toString('base64'), mediaType: 'image/jpeg' };
+}
+
 export async function matchImageToPieces(
 	imageBuffer: Buffer,
 	mediaType: ImageMediaType,
@@ -78,9 +90,8 @@ export async function matchImageToPieces(
 		)
 		.join('\n\n');
 
-	const base64Image = imageBuffer.toString('base64');
+	const { data: base64Image, mediaType: resizedType } = await resizeForClaude(imageBuffer);
 
-	// Text-only matching: descriptions are rich enough, reference images are very expensive
 	const userContent: Anthropic.MessageParam['content'] = [
 		{
 			type: 'text',
@@ -88,7 +99,7 @@ export async function matchImageToPieces(
 		},
 		{
 			type: 'image',
-			source: { type: 'base64', media_type: mediaType, data: base64Image }
+			source: { type: 'base64', media_type: resizedType, data: base64Image }
 		},
 		{
 			type: 'text',
@@ -120,9 +131,9 @@ export async function matchImageToPieces(
 
 export async function describeNewPiece(
 	imageBuffer: Buffer,
-	mediaType: ImageMediaType
+	_mediaType?: ImageMediaType
 ): Promise<string> {
-	const base64Image = imageBuffer.toString('base64');
+	const { data: base64Image, mediaType: resizedType } = await resizeForClaude(imageBuffer);
 
 	const response = await getClient().messages.create({
 		model: DESCRIBE_MODEL,
@@ -133,7 +144,7 @@ export async function describeNewPiece(
 				content: [
 					{
 						type: 'image',
-						source: { type: 'base64', media_type: mediaType, data: base64Image }
+						source: { type: 'base64', media_type: resizedType, data: base64Image }
 					},
 					{
 						type: 'text',
