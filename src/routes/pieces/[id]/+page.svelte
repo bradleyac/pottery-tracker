@@ -29,6 +29,13 @@
 			<p class="piece-description">{piece.description}</p>
 		{/if}
 
+		{#if piece.ai_description}
+			<details class="ai-description">
+				<summary>AI description</summary>
+				<p>{piece.ai_description}</p>
+			</details>
+		{/if}
+
 		<div class="piece-meta">
 			<span>Started {formatDate(piece.created_at)}</span>
 			<span>·</span>
@@ -110,6 +117,29 @@
 		font-size: 0.9375rem;
 		margin-bottom: 0.75rem;
 		line-height: 1.5;
+	}
+
+	.ai-description {
+		margin-bottom: 0.75rem;
+		font-size: 0.8125rem;
+	}
+
+	.ai-description summary {
+		color: #9a7060;
+		cursor: pointer;
+		user-select: none;
+		width: fit-content;
+	}
+
+	.ai-description summary:hover {
+		color: #5a4035;
+	}
+
+	.ai-description p {
+		margin-top: 0.5rem;
+		color: #7a5c4e;
+		line-height: 1.5;
+		white-space: pre-wrap;
 	}
 
 	.piece-meta {
