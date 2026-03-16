@@ -40,7 +40,7 @@ const authGuard: Handle = async ({ event, resolve }) => {
 		redirect(303, '/auth');
 	}
 
-	if (session && user && event.url.pathname === '/auth') {
+	if (session && user && event.url.pathname === '/auth' && event.request.method === 'GET') {
 		redirect(303, '/');
 	}
 
