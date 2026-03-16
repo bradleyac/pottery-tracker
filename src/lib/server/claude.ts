@@ -55,12 +55,12 @@ export type ExistingPiece = {
 
 type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
 
-// Resize to at most 1024px on the longest side before sending to Claude.
+// Resize to at most 512px on the longest side before sending to Claude.
 // Originals are stored at full resolution; only the API payload is shrunk.
-// A typical phone photo at 4000px costs ~4000 tokens; at 1024px it's ~400.
+// A typical phone photo at 4000px costs ~4000 tokens; at 512px it's ~100.
 async function resizeForClaude(buffer: Buffer): Promise<{ data: string; mediaType: 'image/jpeg' }> {
 	const resized = await sharp(buffer)
-		.resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
+		.resize({ width: 512, height: 512, fit: 'inside', withoutEnlargement: true })
 		.jpeg({ quality: 82 })
 		.toBuffer();
 	return { data: resized.toString('base64'), mediaType: 'image/jpeg' };
