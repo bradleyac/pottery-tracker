@@ -17,7 +17,8 @@
 		decision,
 		onDecisionChange,
 		onConfirm,
-		onDismiss
+		onDismiss,
+		onRetry
 	} = $props<{
 		upload: PendingUploadWithUrls;
 		pieces: PieceSummary[];
@@ -25,6 +26,7 @@
 		onDecisionChange: (d: CardDecision) => void;
 		onConfirm: (action: 'accepted' | 'overridden' | 'new_piece', notes: string, pieceId?: string, newPieceName?: string) => Promise<void>;
 		onDismiss: () => Promise<void>;
+		onRetry?: () => Promise<void>;
 	}>();
 
 	let notes = $state('');
@@ -74,7 +76,12 @@
 			<div class="info-col">
 				<p class="filename">{upload.original_filename ?? 'Photo'}</p>
 				<div class="failed-badge">Analysis failed</div>
-				<button class="btn-ghost dismiss-btn" onclick={onDismiss}>Dismiss</button>
+				<div class="actions">
+					{#if onRetry}
+						<button class="btn-secondary" onclick={onRetry}>Retry analysis</button>
+					{/if}
+					<button class="btn-ghost dismiss-btn" onclick={onDismiss}>Dismiss</button>
+				</div>
 			</div>
 		</div>
 

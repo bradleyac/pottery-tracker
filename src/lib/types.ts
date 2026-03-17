@@ -186,6 +186,7 @@ export type PendingUploadWithUrls = PendingUpload & {
 	tempImageUrl: string;
 	matchedPieceCoverUrl: string | null;
 	matchedPieceName: string | null;
+	isStuck: boolean;
 };
 
 export type ClaudeMatchResult = {

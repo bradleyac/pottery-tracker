@@ -14,10 +14,21 @@
 	const uploads = $derived(data.pendingUploads);
 	const hasQueued = $derived(uploads.some((u: PendingUploadWithUrls) => u.status === 'queued'));
 
-	// Auto-poll every 5s while items are queued
+	let retriedIds = $state(new Set<string>());
+
+	// Auto-poll every 5s while items are queued; also fire retries for stuck uploads
 	$effect(() => {
 		if (!hasQueued) return;
-		const timer = setInterval(() => invalidate('app:review'), 5000);
+		const timer = setInterval(async () => {
+			// Fire-and-forget retry for any stuck upload not yet retried this session
+			for (const upload of uploads) {
+				if (upload.isStuck && !retriedIds.has(upload.id)) {
+					retriedIds = new Set([...retriedIds, upload.id]);
+					fetch(`/api/pending-uploads/${upload.id}/retry`, { method: 'POST' }).catch(() => {});
+				}
+			}
+			await invalidate('app:review');
+		}, 5000);
 		return () => clearInterval(timer);
 	});
 
@@ -56,6 +67,12 @@
 		} catch {
 			setDecision(upload.id, { mode: 'error', message: 'Network error. Please try again.' });
 		}
+	}
+
+	async function handleRetry(upload: PendingUploadWithUrls) {
+		retriedIds = new Set([...retriedIds, upload.id]);
+		await fetch(`/api/pending-uploads/${upload.id}/retry`, { method: 'POST' }).catch(() => {});
+		await invalidate('app:review');
 	}
 
 	async function handleDismiss(upload: PendingUploadWithUrls) {
@@ -118,6 +135,7 @@
 					onDecisionChange={(d) => setDecision(upload.id, d)}
 					onConfirm={(action, notes, pid, name) => handleConfirm(upload, action, notes, pid, name)}
 					onDismiss={() => handleDismiss(upload)}
+				onRetry={() => handleRetry(upload)}
 				/>
 			{/each}
 		</div>

@@ -115,6 +115,9 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession }, depends
 		}
 	}
 
+	const TWO_MINUTES_MS = 2 * 60 * 1000;
+	const now = Date.now();
+
 	const pendingUploads: PendingUploadWithUrls[] = uploads.map((u) => {
 		const coverPath = u.matched_piece_id
 			? (pieceCoverPathMap.get(u.matched_piece_id) ?? null)
@@ -123,7 +126,8 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession }, depends
 			...u,
 			tempImageUrl: signedUrlMap.get(u.temp_storage_path) ?? '',
 			matchedPieceCoverUrl: coverPath ? (signedUrlMap.get(coverPath) ?? null) : null,
-			matchedPieceName: u.matched_piece_id ? (pieceNameMap.get(u.matched_piece_id) ?? null) : null
+			matchedPieceName: u.matched_piece_id ? (pieceNameMap.get(u.matched_piece_id) ?? null) : null,
+			isStuck: u.status === 'queued' && (now - new Date(u.created_at).getTime()) > TWO_MINUTES_MS
 		};
 	});
 
