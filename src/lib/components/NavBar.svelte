@@ -142,4 +142,35 @@
 		background: #f5efe8;
 		border-color: #c0622c;
 	}
+
+	@media (max-width: 600px) {
+		.navbar-inner {
+			height: auto;
+			flex-wrap: wrap;
+			padding: 0.625rem 1rem;
+			gap: 0.5rem;
+		}
+
+		.brand { flex: 1; }
+
+		.nav-user {
+			margin-left: 0;
+			gap: 0.5rem;
+		}
+
+		.user-email { display: none; }
+
+		.nav-links {
+			flex: none;
+			width: 100%;
+			order: 3;
+			gap: 0.375rem;
+			padding-bottom: 0.25rem;
+		}
+
+		.nav-link {
+			font-size: 0.875rem;
+			padding: 0.3rem 0.5rem;
+		}
+	}
 </style>

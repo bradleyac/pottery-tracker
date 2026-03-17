@@ -623,4 +623,14 @@
 	}
 
 	.btn-ghost:hover { color: #4a3728; }
+
+	@media (max-width: 540px) {
+		.card-body {
+			flex-direction: column;
+		}
+
+		.piece-picker {
+			grid-template-columns: repeat(2, 1fr);
+		}
+	}
 </style>

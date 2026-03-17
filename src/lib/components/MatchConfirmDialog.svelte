@@ -200,6 +200,12 @@
 	@media (max-width: 540px) {
 		.dialog-body {
 			grid-template-columns: 1fr;
+			padding: 1rem;
+			gap: 1rem;
+		}
+
+		.dialog-title {
+			padding: 1rem;
 		}
 	}
 
