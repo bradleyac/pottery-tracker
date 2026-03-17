@@ -1,36 +1,46 @@
 {
-  "name": "aiguess",
-  "version": "0.0.1",
-  "private": true,
-  "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
-    "preview": "vite preview",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-    "lint": "prettier --check . && eslint .",
-    "format": "prettier --write ."
-  },
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.38.0",
-    "@supabase/ssr": "^0.9.0",
-    "@supabase/supabase-js": "^2.49.2",
-    "@sveltejs/kit": "^2.17.2",
-    "sharp": "^0.34.5"
-  },
-  "devDependencies": {
-    "@sveltejs/adapter-vercel": "^5.5.3",
-    "@sveltejs/vite-plugin-svelte": "^5.0.3",
-    "@types/sharp": "^0.31.1",
-    "eslint": "^9.18.0",
-    "eslint-config-prettier": "^10.0.1",
-    "eslint-plugin-svelte": "^2.46.1",
-    "prettier": "^3.4.2",
-    "prettier-plugin-svelte": "^3.3.3",
-    "svelte": "^5.0.0",
-    "svelte-check": "^4.1.1",
-    "typescript": "^5.7.2",
-    "vite": "^6.2.1"
-  },
-  "type": "module"
+	"name": "aiguess",
+	"version": "0.0.1",
+	"private": true,
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"lint": "prettier --check . && eslint .",
+		"format": "prettier --write ."
+	},
+	"dependencies": {
+		"@anthropic-ai/sdk": "^0.38.0",
+		"@supabase/ssr": "^0.9.0",
+		"@supabase/supabase-js": "^2.49.2",
+		"@sveltejs/kit": "^2.17.2",
+		"sharp": "^0.34.5"
+	},
+	"devDependencies": {
+		"@eslint/compat": "^2.0.2",
+		"@eslint/js": "^9.39.2",
+		"@sveltejs/adapter-vercel": "^5.5.3",
+		"@sveltejs/vite-plugin-svelte": "^5.0.3",
+		"@tailwindcss/forms": "^0.5.11",
+		"@tailwindcss/typography": "^0.5.19",
+		"@tailwindcss/vite": "^4.1.18",
+		"@types/node": "^22",
+		"@types/sharp": "^0.31.1",
+		"eslint": "^9.39.2",
+		"eslint-config-prettier": "^10.1.8",
+		"eslint-plugin-svelte": "^3.14.0",
+		"globals": "^17.3.0",
+		"prettier": "^3.4.2",
+		"prettier-plugin-svelte": "^3.3.3",
+		"prettier-plugin-tailwindcss": "^0.7.2",
+		"svelte": "^5.0.0",
+		"svelte-check": "^4.1.1",
+		"tailwindcss": "^4.1.18",
+		"typescript": "^5.7.2",
+		"typescript-eslint": "^8.54.0",
+		"vite": "^6.2.1"
+	},
+	"type": "module"
 }

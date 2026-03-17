@@ -1,4 +1,5 @@
 <script lang="ts">
+	import './layout.css';
 	import NavBar from '$lib/components/NavBar.svelte';
 	import type { LayoutData } from './$types';
 
@@ -10,9 +11,7 @@
 		<NavBar user={data.user} pendingCount={data.pendingCount} />
 	{/if}
 
-	<main class="main-content">
-		{@render children()}
-	</main>
+	<main class="main-content">{@render children()}</main>
 </div>
 
 <style>
