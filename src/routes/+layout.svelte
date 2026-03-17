@@ -23,14 +23,7 @@
 	}
 
 	:global(body) {
-		font-family:
-			-apple-system,
-			BlinkMacSystemFont,
-			'Segoe UI',
-			Roboto,
-			Oxygen,
-			Ubuntu,
-			sans-serif;
+		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
 		background: #f8f5f0;
 		color: #2c1810;
 		min-height: 100vh;

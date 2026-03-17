@@ -1,6 +1,6 @@
-import { createSupabaseBrowserClient } from '$lib/client/supabase';
-import { invalidate } from '$app/navigation';
 import { browser } from '$app/environment';
+import { invalidate } from '$app/navigation';
+import { createSupabaseBrowserClient } from '$lib/client/supabase';
 import type { LayoutLoad } from './$types';
 
 export const load: LayoutLoad = async ({ data, depends }) => {
@@ -16,5 +16,5 @@ export const load: LayoutLoad = async ({ data, depends }) => {
 		});
 	}
 
-	return { supabase, session: data.session, user: data.user };
+	return { supabase, session: data.session, user: data.user, pendingCount: data.pendingCount };
 };
