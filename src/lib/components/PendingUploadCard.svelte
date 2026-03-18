@@ -11,20 +11,17 @@
 		| { mode: 'dismissed' }
 		| { mode: 'error'; message: string };
 
-	let {
-		upload,
-		pieces,
-		decision,
-		onDecisionChange,
-		onConfirm,
-		onDismiss,
-		onRetry
-	} = $props<{
+	let { upload, pieces, decision, onDecisionChange, onConfirm, onDismiss, onRetry } = $props<{
 		upload: PendingUploadWithUrls;
 		pieces: PieceSummary[];
 		decision: CardDecision;
 		onDecisionChange: (d: CardDecision) => void;
-		onConfirm: (action: 'accepted' | 'overridden' | 'new_piece', notes: string, pieceId?: string, newPieceName?: string) => Promise<void>;
+		onConfirm: (
+			action: 'accepted' | 'overridden' | 'new_piece',
+			notes: string,
+			pieceId?: string,
+			newPieceName?: string
+		) => Promise<void>;
 		onDismiss: () => Promise<void>;
 		onRetry?: () => Promise<void>;
 	}>();
@@ -32,9 +29,7 @@
 	let notes = $state('');
 
 	const isMatch = $derived(
-		upload.status === 'ready' &&
-		upload.matched_piece_id !== null &&
-		(upload.confidence ?? 0) >= 0.6
+		upload.status === 'ready' && upload.matched_piece_id !== null && (upload.confidence ?? 0) >= 0.6
 	);
 
 	async function handleAccept() {
@@ -44,20 +39,27 @@
 
 	async function handleOverride() {
 		if (decision.mode !== 'choose_piece') return;
+		const selectedId = decision.selectedId;
 		onDecisionChange({ mode: 'saving' });
-		await onConfirm('overridden', notes, decision.selectedId);
+		await onConfirm('overridden', notes, selectedId);
 	}
 
 	async function handleCreateNew() {
 		if (decision.mode !== 'new_piece') return;
 		if (!decision.name.trim()) return;
+		const name = decision.name.trim();
 		onDecisionChange({ mode: 'saving' });
-		await onConfirm('new_piece', notes, undefined, decision.name.trim());
+		await onConfirm('new_piece', notes, undefined, name);
 	}
+
+	$inspect(decision);
 </script>
 
-<div class="card" class:queued={upload.status === 'queued'} class:failed={upload.status === 'failed'}>
-
+<div
+	class="card"
+	class:queued={upload.status === 'queued'}
+	class:failed={upload.status === 'failed'}
+>
 	{#if upload.status === 'queued'}
 		<div class="card-body skeleton-body">
 			<div class="skeleton-img"></div>
@@ -67,7 +69,6 @@
 				<p class="analyzing-label">Analyzing with Claude…</p>
 			</div>
 		</div>
-
 	{:else if upload.status === 'failed'}
 		<div class="card-body">
 			{#if upload.tempImageUrl}
@@ -84,26 +85,22 @@
 				</div>
 			</div>
 		</div>
-
 	{:else if decision.mode === 'saving'}
 		<div class="card-body saving-body">
 			<div class="spinner"></div>
 			<p>Saving…</p>
 		</div>
-
 	{:else if decision.mode === 'saved'}
 		<div class="card-body saved-body">
 			<span class="saved-icon">✓</span>
 			<p>Saved! <a href="/pieces/{decision.pieceId}" class="view-link">View piece →</a></p>
 		</div>
-
 	{:else if decision.mode === 'dismissed'}
 		<!-- Hidden/removed, parent handles removal -->
 		<div class="card-body saved-body">
 			<span class="saved-icon dismiss-icon">✕</span>
 			<p>Dismissed</p>
 		</div>
-
 	{:else if decision.mode === 'error'}
 		<div class="card-body">
 			{#if upload.tempImageUrl}
@@ -113,12 +110,13 @@
 				<p class="filename">{upload.original_filename ?? 'Photo'}</p>
 				<div class="failed-badge">{decision.message}</div>
 				<div class="actions">
-					<button class="btn-secondary" onclick={() => onDecisionChange({ mode: 'review' })}>Try again</button>
+					<button class="btn-secondary" onclick={() => onDecisionChange({ mode: 'review' })}
+						>Try again</button
+					>
 					<button class="btn-ghost" onclick={onDismiss}>Dismiss</button>
 				</div>
 			</div>
 		</div>
-
 	{:else if decision.mode === 'review'}
 		<div class="card-body">
 			<div class="photos-col">
@@ -127,7 +125,11 @@
 				{/if}
 				{#if upload.matchedPieceCoverUrl}
 					<div class="matched-cover-wrap">
-						<img src={upload.matchedPieceCoverUrl} alt={upload.matchedPieceName ?? 'Matched piece'} class="cover-thumb" />
+						<img
+							src={upload.matchedPieceCoverUrl}
+							alt={upload.matchedPieceName ?? 'Matched piece'}
+							class="cover-thumb"
+						/>
 						<span class="cover-label">{upload.matchedPieceName}</span>
 					</div>
 				{/if}
@@ -137,25 +139,46 @@
 				<p class="filename">{upload.original_filename ?? 'Photo'}</p>
 
 				{#if isMatch}
-					<div class="confidence-badge" style="--dot-color: {confidenceColor(upload.confidence ?? 0)}">
+					<div
+						class="confidence-badge"
+						style="--dot-color: {confidenceColor(upload.confidence ?? 0)}"
+					>
 						<span class="conf-dot"></span>
-						{confidenceLabel(upload.confidence ?? 0)} match ({Math.round((upload.confidence ?? 0) * 100)}%)
+						{confidenceLabel(upload.confidence ?? 0)} match ({Math.round(
+							(upload.confidence ?? 0) * 100
+						)}%)
 					</div>
 					<p class="reasoning">{upload.claude_reasoning}</p>
 
 					<div class="notes-field">
 						<label for="notes-{upload.id}">Notes (optional)</label>
-						<textarea id="notes-{upload.id}" bind:value={notes} placeholder="Firing temp, glaze, stage…" rows="2"></textarea>
+						<textarea
+							id="notes-{upload.id}"
+							bind:value={notes}
+							placeholder="Firing temp, glaze, stage…"
+							rows="2"
+						></textarea>
 					</div>
 
 					<div class="actions">
 						<button class="btn-primary" onclick={handleAccept}>
 							Add to "{upload.matchedPieceName}"
 						</button>
-						<button class="btn-secondary" onclick={() => onDecisionChange({ mode: 'choose_piece', selectedId: upload.matched_piece_id ?? '' })}>
+						<button
+							class="btn-secondary"
+							onclick={() =>
+								onDecisionChange({
+									mode: 'choose_piece',
+									selectedId: upload.matched_piece_id ?? ''
+								})}
+						>
 							Pick different piece
 						</button>
-						<button class="btn-ghost" onclick={() => onDecisionChange({ mode: 'new_piece', name: upload.suggested_name ?? '' })}>
+						<button
+							class="btn-ghost"
+							onclick={() =>
+								onDecisionChange({ mode: 'new_piece', name: upload.suggested_name ?? '' })}
+						>
 							This is a new piece
 						</button>
 					</div>
@@ -167,15 +190,27 @@
 
 					<div class="notes-field">
 						<label for="notes-{upload.id}">Notes (optional)</label>
-						<textarea id="notes-{upload.id}" bind:value={notes} placeholder="Firing temp, glaze, stage…" rows="2"></textarea>
+						<textarea
+							id="notes-{upload.id}"
+							bind:value={notes}
+							placeholder="Firing temp, glaze, stage…"
+							rows="2"
+						></textarea>
 					</div>
 
 					<div class="actions">
-						<button class="btn-primary" onclick={() => onDecisionChange({ mode: 'new_piece', name: upload.suggested_name ?? '' })}>
+						<button
+							class="btn-primary"
+							onclick={() =>
+								onDecisionChange({ mode: 'new_piece', name: upload.suggested_name ?? '' })}
+						>
 							Create new piece
 						</button>
 						{#if pieces.length > 0}
-							<button class="btn-secondary" onclick={() => onDecisionChange({ mode: 'choose_piece', selectedId: '' })}>
+							<button
+								class="btn-secondary"
+								onclick={() => onDecisionChange({ mode: 'choose_piece', selectedId: '' })}
+							>
 								Assign to existing piece
 							</button>
 						{/if}
@@ -184,7 +219,6 @@
 				{/if}
 			</div>
 		</div>
-
 	{:else if decision.mode === 'choose_piece'}
 		<div class="card-body">
 			{#if upload.tempImageUrl}
@@ -213,11 +247,12 @@
 					<button class="btn-primary" onclick={handleOverride} disabled={!decision.selectedId}>
 						Assign to this piece
 					</button>
-					<button class="btn-ghost" onclick={() => onDecisionChange({ mode: 'review' })}>Back</button>
+					<button class="btn-ghost" onclick={() => onDecisionChange({ mode: 'review' })}
+						>Back</button
+					>
 				</div>
 			</div>
 		</div>
-
 	{:else if decision.mode === 'new_piece'}
 		<div class="card-body">
 			{#if upload.tempImageUrl}
@@ -229,7 +264,8 @@
 				<input
 					type="text"
 					value={decision.name}
-					oninput={(e) => onDecisionChange({ mode: 'new_piece', name: (e.target as HTMLInputElement).value })}
+					oninput={(e) =>
+						onDecisionChange({ mode: 'new_piece', name: (e.target as HTMLInputElement).value })}
 					placeholder="e.g. Celadon Bowl #1"
 					class="name-input"
 				/>
@@ -237,7 +273,9 @@
 					<button class="btn-primary" onclick={handleCreateNew} disabled={!decision.name.trim()}>
 						Create new piece
 					</button>
-					<button class="btn-ghost" onclick={() => onDecisionChange({ mode: 'review' })}>Back</button>
+					<button class="btn-ghost" onclick={() => onDecisionChange({ mode: 'review' })}
+						>Back</button
+					>
 				</div>
 			</div>
 		</div>
@@ -298,8 +336,12 @@
 		animation: shimmer 1.5s infinite;
 	}
 
-	.skeleton-line.wide { width: 60%; }
-	.skeleton-line.narrow { width: 35%; }
+	.skeleton-line.wide {
+		width: 60%;
+	}
+	.skeleton-line.narrow {
+		width: 35%;
+	}
 
 	.analyzing-label {
 		font-size: 0.8125rem;
@@ -308,8 +350,12 @@
 	}
 
 	@keyframes shimmer {
-		0% { background-position: 200% 0; }
-		100% { background-position: -200% 0; }
+		0% {
+			background-position: 200% 0;
+		}
+		100% {
+			background-position: -200% 0;
+		}
 	}
 
 	/* Saving state */
@@ -330,7 +376,9 @@
 	}
 
 	@keyframes spin {
-		to { transform: rotate(360deg); }
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	/* Saved state */
@@ -538,14 +586,17 @@
 		height: 90px;
 	}
 
-	.piece-option:hover { border-color: #c0622c; }
+	.piece-option:hover {
+		border-color: #c0622c;
+	}
 
 	.piece-option.selected {
 		border-color: #c0622c;
 		box-shadow: 0 0 0 2px rgba(192, 98, 44, 0.2);
 	}
 
-	.piece-option-img, .piece-option-placeholder {
+	.piece-option-img,
+	.piece-option-placeholder {
 		width: 100%;
 		flex: 1;
 		min-height: 0;
@@ -553,7 +604,9 @@
 		display: block;
 	}
 
-	.piece-option-placeholder { background: #f0ebe4; }
+	.piece-option-placeholder {
+		background: #f0ebe4;
+	}
 
 	.piece-option-name {
 		padding: 0.25rem 0.375rem;
@@ -577,7 +630,9 @@
 		outline: none;
 	}
 
-	.name-input:focus { border-color: #c0622c; }
+	.name-input:focus {
+		border-color: #c0622c;
+	}
 
 	/* Buttons */
 	.btn-primary {
@@ -591,7 +646,9 @@
 		transition: background 0.15s;
 	}
 
-	.btn-primary:hover:not(:disabled) { background: #a8521f; }
+	.btn-primary:hover:not(:disabled) {
+		background: #a8521f;
+	}
 
 	.btn-primary:disabled {
 		opacity: 0.5;
@@ -622,7 +679,9 @@
 		font-size: 0.8125rem;
 	}
 
-	.btn-ghost:hover { color: #4a3728; }
+	.btn-ghost:hover {
+		color: #4a3728;
+	}
 
 	@media (max-width: 540px) {
 		.card-body {
