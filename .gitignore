@@ -10,3 +10,6 @@ vite-config.ts.timestamp-*
 vite.config.js.timestamp-*
 /.vercel
 /supabase/.temp
+
+*storybook.log
+storybook-static
