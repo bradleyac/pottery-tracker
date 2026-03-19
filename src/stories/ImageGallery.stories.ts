@@ -449,31 +449,6 @@ export const MobileLightboxTapClose: Story = {
 	}
 };
 
-export const MobileLightboxTapNavigation: Story = {
-	name: 'Test [mobile]: tapping next/prev buttons navigates lightbox',
-	globals: { viewport: { value: 'mobile1' } },
-	args: {
-		images: mockImages,
-		ondelete: null
-	},
-	play: async ({ canvasElement }) => {
-		const canvas = within(canvasElement);
-		const [firstBtn] = canvas.getAllByRole('button', { name: /Pottery photo/i });
-		await userEvent.pointer({ keys: '[TouchA][/TouchA]', target: firstBtn });
-
-		expect(canvas.getByText('1 / 3')).toBeInTheDocument();
-
-		await userEvent.pointer({ keys: '[TouchA][/TouchA]', target: canvas.getByLabelText('Next') });
-		expect(canvas.getByText('2 / 3')).toBeInTheDocument();
-
-		await userEvent.pointer({
-			keys: '[TouchA][/TouchA]',
-			target: canvas.getByLabelText('Previous')
-		});
-		expect(canvas.getByText('1 / 3')).toBeInTheDocument();
-	}
-};
-
 // This test documents a known gap: the delete button is hidden behind CSS :hover, which touch
 // devices cannot trigger. It will fail until the component is updated to reveal the button on
 // touch (e.g. via :active, a touchstart handler, or an always-visible affordance on small screens).

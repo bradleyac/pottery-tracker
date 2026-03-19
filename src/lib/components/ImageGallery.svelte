@@ -192,15 +192,10 @@
 		font-size: 0.75rem;
 		line-height: 1;
 		cursor: pointer;
-		opacity: 0;
-		transition: opacity 0.15s, background 0.15s;
+		transition: background 0.15s;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-	}
-
-	.image-wrapper:hover .delete-btn {
-		opacity: 1;
 	}
 
 	.delete-btn:hover {
