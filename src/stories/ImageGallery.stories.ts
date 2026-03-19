@@ -474,36 +474,31 @@ export const MobileLightboxTapNavigation: Story = {
 	}
 };
 
-// Disabled: Cannot emulate pointer: coarse in storybook, and the component depends on it to know it's in touch mode.
-// // This test documents a known gap: the delete button is hidden behind CSS :hover, which touch
-// // devices cannot trigger. It will fail until the component is updated to reveal the button on
-// // touch (e.g. via :active, a touchstart handler, or an always-visible affordance on small screens).
-// export const MobileDeleteButtonReachableByTouch: Story = {
-// 	name: 'Test [mobile]: delete button is reachable by touch (requires component fix)',
-// 	globals: { viewport: { value: 'mobile1' } },
-// 	args: {
-// 		images: mockImages,
-// 		ondelete: fn().mockResolvedValue(undefined)
-// 	},
-// 	play: async ({ canvasElement }) => {
-// 		const canvas = within(canvasElement);
-// 		const imageWrapper = canvasElement.querySelector('.marked') as HTMLElement;
-// 		let deleteBtn = canvas.getAllByLabelText('Delete photo')[0];
+// This test documents a known gap: the delete button is hidden behind CSS :hover, which touch
+// devices cannot trigger. It will fail until the component is updated to reveal the button on
+// touch (e.g. via :active, a touchstart handler, or an always-visible affordance on small screens).
+export const MobileDeleteButtonReachableByTouch: Story = {
+	name: 'Test [mobile]: delete button is reachable by touch (requires component fix)',
+	globals: { viewport: { value: 'mobile1' } },
+	args: {
+		images: mockImages,
+		ondelete: fn().mockResolvedValue(undefined)
+	},
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		const imageWrapper = canvasElement.querySelector('.image-wrapper') as HTMLElement;
+		const deleteBtn = canvas.getAllByLabelText('Delete photo')[0];
 
-// 		// Delete button starts hidden
-// 		console.log(deleteBtn);
-// 		expect(deleteBtn).toBeInTheDocument();
-// 		expect(imageWrapper).toBeInTheDocument();
-// 		expect(imageWrapper).toContainElement(deleteBtn);
-// 		expect(getComputedStyle(deleteBtn).opacity).toBe('0');
+		// Delete button starts hidden
+		expect(deleteBtn).toBeInTheDocument();
+		expect(getComputedStyle(deleteBtn).opacity).toBe('0');
 
-// 		// Touch the image wrapper — on a real mobile browser the first tap triggers :active/:hover
-// 		// and should reveal the button. Without a component-level fix this will fail.
-// 		await userEvent.pointer({ keys: '[TouchA][/TouchA]', target: imageWrapper });
-// 		deleteBtn = canvas.getAllByLabelText('Delete photo')[0];
-// 		expect(getComputedStyle(deleteBtn).opacity).toBe('1');
-// 	}
-// };
+		// Touch the image wrapper — on a real mobile browser the first tap triggers :active/:hover
+		// and should reveal the button. Without a component-level fix this will fail.
+		await userEvent.pointer({ keys: '[TouchA][/TouchA]', target: imageWrapper });
+		expect(getComputedStyle(deleteBtn).opacity).toBe('1');
+	}
+};
 
 export const MobileDeleteFlow: Story = {
 	name: 'Test [mobile]: touch delete button, confirm deletion',

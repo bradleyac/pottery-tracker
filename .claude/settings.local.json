@@ -1,10 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "WebSearch",
-      "Bash(node:*)",
-      "Bash(npx vitest:*)",
-      "Bash(grep:*)"
+      "WebSearch"
     ]
   }
 }

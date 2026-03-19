@@ -1,8 +1,6 @@
 <script lang="ts">
 	import type { ImageWithUrl } from '$lib/types';
 	import { formatDate } from '$lib/utils';
-	import { on } from 'svelte/events';
-	import { MediaQuery } from 'svelte/reactivity';
 
 	let { images, ondelete = null } = $props<{
 		images: ImageWithUrl[];
@@ -12,20 +10,12 @@
 	let lightboxIndex = $state<number | null>(null);
 	let confirmingId = $state<string | null>(null);
 	let deletingId = $state<string | null>(null);
-	let touchedImageId = $state<string | null>(null);
-	$inspect(touchedImageId, lightboxIndex).with((type, imageId, index) =>
-		console.log(`imageId: ${imageId}, index: ${index}`)
-	);
-
-	let isTouch = new MediaQuery('pointer: coarse');
 
 	function openLightbox(index: number) {
-		console.log(`OPEN CALL imageId: ${touchedImageId}, index: ${lightboxIndex}`);
 		lightboxIndex = index;
 	}
 
-	async function closeLightbox() {
-		touchedImageId = null;
+	function closeLightbox() {
 		lightboxIndex = null;
 	}
 
@@ -46,24 +36,6 @@
 		if (e.key === 'ArrowRight') nextImage();
 	}
 
-	$effect(() => {
-		if (document && isTouch.current) {
-			return on(
-				document,
-				'pointerdown',
-				(e) => {
-					if (lightboxIndex !== null || (e.target as HTMLElement)?.closest('.marked')) {
-						return;
-					} else {
-						console.log('oops!');
-						touchedImageId = null;
-					}
-				},
-				{ capture: true }
-			);
-		}
-	});
-
 	async function confirmDelete(imageId: string) {
 		if (!ondelete) return;
 		deletingId = imageId;
@@ -81,21 +53,8 @@
 <div class="gallery">
 	{#each images as image, i (image.id)}
 		<div class="gallery-item">
-			<div class={['marked image-wrapper', touchedImageId === image.id && 'touched']}>
-				<button
-					class="image-btn"
-					onpointerdown={(e) => {
-						if (isTouch.current) {
-							if (touchedImageId === image.id) {
-								openLightbox(i);
-							} else {
-								touchedImageId = image.id;
-							}
-						} else {
-							openLightbox(i);
-						}
-					}}
-				>
+			<div class="image-wrapper">
+				<button class="image-btn" onclick={() => openLightbox(i)}>
 					<img src={image.url} alt="Pottery photo {i + 1}" loading="lazy" />
 				</button>
 				{#if ondelete}
@@ -103,8 +62,8 @@
 						class="delete-btn"
 						onclick={() => (confirmingId = image.id)}
 						aria-label="Delete photo"
-						title="Delete photo">✕</button
-					>
+						title="Delete photo"
+					>✕</button>
 				{/if}
 			</div>
 			<div class="image-meta">
@@ -132,21 +91,34 @@
 </div>
 
 {#if lightboxIndex !== null}
-	<div class="lightbox-overlay" role="dialog" aria-modal="true" onpointerdown={closeLightbox}>
-		<button class="lightbox-close" onpointerdown={closeLightbox} aria-label="Close">✕</button>
+	<div
+		class="lightbox-overlay"
+		role="dialog"
+		aria-modal="true"
+		onclick={closeLightbox}
+	>
+		<button
+			class="lightbox-close"
+			onclick={closeLightbox}
+			aria-label="Close"
+		>✕</button>
 
 		<button
 			class="lightbox-nav prev"
-			onpointerdown={(e) => {
-				e.stopPropagation();
-				prevImage();
-			}}
+			onclick={(e) => { e.stopPropagation(); prevImage(); }}
 			aria-label="Previous"
-			disabled={images.length <= 1}>‹</button
-		>
+			disabled={images.length <= 1}
+		>‹</button>
 
-		<div class="lightbox-content" role="presentation" onpointerdown={(e) => e.stopPropagation()}>
-			<img src={images[lightboxIndex].url} alt="Pottery photo {lightboxIndex + 1}" />
+		<div
+			class="lightbox-content"
+			role="presentation"
+			onclick={(e) => e.stopPropagation()}
+		>
+			<img
+				src={images[lightboxIndex].url}
+				alt="Pottery photo {lightboxIndex + 1}"
+			/>
 			<div class="lightbox-info">
 				<span>{formatDate(images[lightboxIndex].uploaded_at)}</span>
 				<span class="counter">{lightboxIndex + 1} / {images.length}</span>
@@ -158,13 +130,10 @@
 
 		<button
 			class="lightbox-nav next"
-			onpointerdown={(e) => {
-				e.stopPropagation();
-				nextImage();
-			}}
+			onclick={(e) => { e.stopPropagation(); nextImage(); }}
 			aria-label="Next"
-			disabled={images.length <= 1}>›</button
-		>
+			disabled={images.length <= 1}
+		>›</button>
 	</div>
 {/if}
 
@@ -206,6 +175,10 @@
 		display: block;
 	}
 
+	.image-btn:hover img {
+		transform: scale(1.04);
+	}
+
 	.delete-btn {
 		position: absolute;
 		top: 0.4rem;
@@ -220,16 +193,18 @@
 		line-height: 1;
 		cursor: pointer;
 		opacity: 0;
-		transition:
-			opacity 0.15s,
-			background 0.15s;
+		transition: opacity 0.15s, background 0.15s;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 	}
 
-	.image-wrapper.touched .delete-btn {
+	.image-wrapper:hover .delete-btn {
 		opacity: 1;
+	}
+
+	.delete-btn:hover {
+		background: rgba(180, 30, 30, 0.85);
 	}
 
 	.image-meta {
@@ -316,6 +291,10 @@
 		transition: background 0.15s;
 	}
 
+	.lightbox-close:hover {
+		background: rgba(255, 255, 255, 0.25);
+	}
+
 	.lightbox-content {
 		max-width: 90vw;
 		max-height: 90vh;
@@ -366,6 +345,10 @@
 		line-height: 1;
 	}
 
+	.lightbox-nav:hover:not(:disabled) {
+		background: rgba(255, 255, 255, 0.25);
+	}
+
 	.lightbox-nav:disabled {
 		opacity: 0.2;
 		cursor: default;
@@ -377,27 +360,5 @@
 
 	.next {
 		right: 1rem;
-	}
-
-	@media (pointer: fine) {
-		.image-btn:hover img {
-			transform: scale(1.04);
-		}
-
-		.image-wrapper:hover .delete-btn {
-			opacity: 1;
-		}
-
-		.lightbox-close:hover {
-			background: rgba(255, 255, 255, 0.25);
-		}
-
-		.delete-btn:hover {
-			background: rgba(180, 30, 30, 0.85);
-		}
-
-		.lightbox-nav:hover:not(:disabled) {
-			background: rgba(255, 255, 255, 0.25);
-		}
 	}
 </style>
