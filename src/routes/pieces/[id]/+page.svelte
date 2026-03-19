@@ -2,16 +2,68 @@
 	import ImageGallery from '$lib/components/ImageGallery.svelte';
 	import type { PageData } from './$types';
 	import { formatDate } from '$lib/utils';
-	import { invalidateAll } from '$app/navigation';
+	import { invalidateAll, goto } from '$app/navigation';
 
 	let { data } = $props<{ data: PageData }>();
 
 	let { piece } = $derived(data);
 
+	let fileInput: HTMLInputElement;
+	let uploading = $state(false);
+	let uploadError = $state<string | null>(null);
+	let deleting = $state(false);
+
 	async function handleDeleteImage(imageId: string) {
 		const resp = await fetch(`/api/images/${imageId}`, { method: 'DELETE' });
 		if (!resp.ok) throw new Error(await resp.text());
 		await invalidateAll();
+	}
+
+	function triggerFileInput() {
+		uploadError = null;
+		fileInput.click();
+	}
+
+	async function handleFileSelected() {
+		const file = fileInput.files?.[0];
+		if (!file) return;
+
+		uploading = true;
+		uploadError = null;
+		try {
+			const formData = new FormData();
+			formData.append('image', file);
+			const resp = await fetch(`/api/pieces/${piece.id}/upload`, {
+				method: 'POST',
+				body: formData
+			});
+			if (!resp.ok) {
+				const text = await resp.text();
+				throw new Error(text || 'Upload failed');
+			}
+			await invalidateAll();
+		} catch (err) {
+			uploadError = err instanceof Error ? err.message : 'Upload failed';
+		} finally {
+			uploading = false;
+			fileInput.value = '';
+		}
+	}
+
+	async function handleDeletePiece() {
+		if (!confirm(`Delete "${piece.name}" and all its photos? This cannot be undone.`)) return;
+		deleting = true;
+		try {
+			const resp = await fetch(`/api/pieces/${piece.id}`, { method: 'DELETE' });
+			if (!resp.ok) {
+				const text = await resp.text();
+				throw new Error(text || 'Delete failed');
+			}
+			await goto('/');
+		} catch (err) {
+			alert(err instanceof Error ? err.message : 'Failed to delete piece');
+			deleting = false;
+		}
 	}
 </script>
 
@@ -29,8 +81,25 @@
 
 		<div class="piece-title-row">
 			<h1>{piece.name}</h1>
-			<a href="/upload" class="upload-btn">+ Add Photo</a>
+			<div class="title-actions">
+				<input
+					bind:this={fileInput}
+					type="file"
+					accept="image/*"
+					style="display:none"
+					onchange={handleFileSelected}
+				/>
+				<button class="upload-btn" onclick={triggerFileInput} disabled={uploading || deleting}>
+					{uploading ? 'Uploading…' : '+ Add Photo'}
+				</button>
+				<button class="delete-piece-btn" onclick={handleDeletePiece} disabled={uploading || deleting}>
+					{deleting ? 'Deleting…' : 'Delete'}
+				</button>
+			</div>
 		</div>
+		{#if uploadError}
+			<p class="upload-error">{uploadError}</p>
+		{/if}
 
 		{#if piece.description}
 			<p class="piece-description">{piece.description}</p>
@@ -53,7 +122,9 @@
 	{#if piece.images.length === 0}
 		<div class="empty-images">
 			<p>No photos yet.</p>
-			<a href="/upload" class="btn-primary">Upload a photo</a>
+			<button class="btn-primary" onclick={triggerFileInput} disabled={uploading}>
+				{uploading ? 'Uploading…' : 'Upload a photo'}
+			</button>
 		</div>
 	{:else}
 		<section class="timeline-section">
@@ -103,20 +174,64 @@
 		color: #2c1810;
 	}
 
-	.upload-btn {
+	.title-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
 		flex-shrink: 0;
+	}
+
+	.upload-btn {
 		padding: 0.625rem 1.25rem;
 		background: #c0622c;
 		color: white;
+		border: none;
 		border-radius: 8px;
 		font-weight: 600;
 		font-size: 0.9375rem;
 		white-space: nowrap;
+		cursor: pointer;
 		transition: background 0.15s;
 	}
 
-	.upload-btn:hover {
+	.upload-btn:hover:not(:disabled) {
 		background: #a8521f;
+	}
+
+	.upload-btn:disabled {
+		opacity: 0.65;
+		cursor: not-allowed;
+	}
+
+	.delete-piece-btn {
+		padding: 0.625rem 1rem;
+		background: transparent;
+		color: #b91c1c;
+		border: 1.5px solid #b91c1c;
+		border-radius: 8px;
+		font-weight: 600;
+		font-size: 0.9375rem;
+		white-space: nowrap;
+		cursor: pointer;
+		transition:
+			background 0.15s,
+			color 0.15s;
+	}
+
+	.delete-piece-btn:hover:not(:disabled) {
+		background: #b91c1c;
+		color: white;
+	}
+
+	.delete-piece-btn:disabled {
+		opacity: 0.65;
+		cursor: not-allowed;
+	}
+
+	.upload-error {
+		color: #b91c1c;
+		font-size: 0.875rem;
+		margin-bottom: 0.75rem;
 	}
 
 	.piece-description {

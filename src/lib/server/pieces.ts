@@ -174,6 +174,56 @@ export async function addImageToExistingPiece(
 	return { imageId, pieceId };
 }
 
+export async function addImageBufferToPiece(
+	userId: string,
+	pieceId: string,
+	buffer: Buffer,
+	contentType: string,
+	notes: string | null
+): Promise<{ imageId: string; pieceId: string }> {
+	const supabase = createServiceRoleClient();
+
+	const { data: piece, error: pieceError } = await supabase
+		.from('pieces')
+		.select('id, user_id, cover_image_id, ai_description')
+		.eq('id', pieceId)
+		.eq('user_id', userId)
+		.single();
+
+	if (pieceError || !piece) throw new Error('Piece not found');
+
+	const imageId = randomUUID();
+	const permanentPath = buildStoragePath(userId, pieceId, imageId);
+
+	await uploadImage(buffer, permanentPath, contentType);
+
+	const isFirstImage = !piece.cover_image_id;
+	const { error: insertError } = await supabase.from('images').insert({
+		id: imageId,
+		piece_id: pieceId,
+		user_id: userId,
+		storage_path: permanentPath,
+		notes: notes ?? null,
+		is_cover: isFirstImage
+	});
+
+	if (insertError) throw new Error(`Failed to save image: ${insertError.message}`);
+
+	const updates: Record<string, unknown> = {};
+	if (isFirstImage) updates.cover_image_id = imageId;
+
+	if (!piece.ai_description) {
+		const newDescription = await describeNewPiece(buffer).catch(() => null);
+		if (newDescription) updates.ai_description = newDescription;
+	}
+
+	if (Object.keys(updates).length > 0) {
+		await supabase.from('pieces').update(updates).eq('id', pieceId);
+	}
+
+	return { imageId, pieceId };
+}
+
 export async function getPieceCoverUrls(
 	existingPieces: ExistingPiece[],
 	coverPathMap: Map<string, string>
