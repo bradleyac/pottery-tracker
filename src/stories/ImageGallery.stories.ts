@@ -458,11 +458,7 @@ export const MobileDeleteFlow: Story = {
 	},
 	play: async ({ canvasElement, args }) => {
 		const canvas = within(canvasElement);
-		const imageWrapper = canvasElement.querySelector('.image-wrapper') as HTMLElement;
 		const deleteBtn = canvas.getAllByLabelText('Delete photo')[0];
-
-		// Touch the wrapper to reveal the delete button (depends on MobileDeleteButtonReachableByTouch passing)
-		await userEvent.pointer({ keys: '[TouchA][/TouchA]', target: imageWrapper });
 
 		// Tap the delete button
 		await userEvent.pointer({ keys: '[TouchA][/TouchA]', target: deleteBtn });
