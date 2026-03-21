@@ -566,7 +566,7 @@
 
 	.piece-picker {
 		display: grid;
-		grid-template-columns: repeat(3, 1fr);
+		grid-template-columns: repeat(auto-fill, 90px);
 		gap: 0.375rem;
 		max-height: 220px;
 		overflow-y: auto;
@@ -583,7 +583,6 @@
 		overflow: hidden;
 		text-align: left;
 		transition: border-color 0.15s;
-		height: 90px;
 	}
 
 	.piece-option:hover {
@@ -598,8 +597,7 @@
 	.piece-option-img,
 	.piece-option-placeholder {
 		width: 100%;
-		flex: 1;
-		min-height: 0;
+		aspect-ratio: 1;
 		object-fit: cover;
 		display: block;
 	}
@@ -686,10 +684,6 @@
 	@media (max-width: 540px) {
 		.card-body {
 			flex-direction: column;
-		}
-
-		.piece-picker {
-			grid-template-columns: repeat(2, 1fr);
 		}
 	}
 </style>
