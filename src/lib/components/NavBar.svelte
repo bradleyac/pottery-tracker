@@ -117,12 +117,13 @@
 		align-items: center;
 		gap: 0.75rem;
 		margin-left: auto;
+		min-width: 0;
 	}
 
 	.user-email {
 		font-size: 0.8125rem;
 		color: #7a5c4e;
-		max-width: 160px;
+		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;

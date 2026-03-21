@@ -5,6 +5,7 @@ import { expect, within } from 'storybook/test';
 import { MINIMAL_VIEWPORTS } from 'storybook/viewport';
 
 const mockUser = { id: 'user-1', email: 'potter@example.com' } as User;
+const longEmailUser = { id: 'user-2', email: 'andrew.charles.bradley@gmail.com' } as User;
 
 const meta = {
 	title: 'Components/NavBar',
@@ -151,5 +152,39 @@ export const DesktopShowsEmail: Story = {
 		expect(emailEl).not.toBeNull();
 		const display = getComputedStyle(emailEl!).display;
 		expect(display).not.toBe('none');
+	}
+};
+
+// --- Long email regression tests ---
+
+export const LongEmailDesktop: Story = {
+	name: 'Viewport: long email at desktop (1280px)',
+	globals: { viewport: { value: 'desktop' } },
+	args: { user: longEmailUser, pendingCount: 0 }
+};
+
+export const LongEmailNotTruncatedAtDesktop: Story = {
+	name: 'Test [desktop]: long email is not truncated when space is available',
+	globals: { viewport: { value: 'desktop' } },
+	args: { user: longEmailUser, pendingCount: 0 },
+	play: async ({ canvasElement }) => {
+		const canvas = within(canvasElement);
+		expect(canvas.getByText('andrew.charles.bradley@gmail.com')).toBeInTheDocument();
+		const emailEl = canvasElement.querySelector('.user-email') as HTMLElement;
+		// Text should fit without overflow — scrollWidth should not exceed offsetWidth
+		expect(emailEl.scrollWidth).toBeLessThanOrEqual(emailEl.offsetWidth);
+	}
+};
+
+export const LongEmailTruncatedWhenTooNarrow: Story = {
+	name: 'Test [mobile2]: long email truncates when viewport is 414px',
+	globals: { viewport: { value: 'mobile2' } },
+	args: { user: longEmailUser, pendingCount: 0 },
+	play: async ({ canvasElement }) => {
+		// On mobile2 (414px) the email is hidden via CSS — confirm it's not visible
+		const emailEl = canvasElement.querySelector('.user-email') as HTMLElement | null;
+		expect(emailEl).not.toBeNull();
+		const display = getComputedStyle(emailEl!).display;
+		expect(display).toBe('none');
 	}
 };
