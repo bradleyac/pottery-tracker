@@ -106,9 +106,33 @@
 		{/if}
 
 		{#if piece.ai_description}
+			{@const identity = (() => { try { return JSON.parse(piece.ai_description); } catch { return null; } })()}
 			<details class="ai-description">
-				<summary>AI description</summary>
-				<p>{piece.ai_description}</p>
+				<summary>AI identity card</summary>
+				{#if identity && typeof identity === 'object' && identity.form}
+					<dl class="identity-card">
+						<dt>Form</dt><dd>{identity.form}</dd>
+						{#if identity.profile}<dt>Profile</dt><dd>{identity.profile}</dd>{/if}
+						{#if identity.rimStyle}<dt>Rim</dt><dd>{identity.rimStyle}</dd>{/if}
+						{#if identity.footRing}<dt>Foot/Base</dt><dd>{identity.footRing}</dd>{/if}
+						{#if identity.handles}
+							<dt>Handles</dt>
+							<dd>{identity.handles.count === 0 ? 'None' : `${identity.handles.count} — ${identity.handles.style ?? ''}`}</dd>
+						{/if}
+						{#if identity.distinctiveMarks?.length > 0}
+							<dt>Distinctive marks</dt>
+							<dd><ul>{#each identity.distinctiveMarks as mark}<li>{mark}</li>{/each}</ul></dd>
+						{/if}
+						{#if identity.decorativeElements?.length > 0}
+							<dt>Decorative elements</dt>
+							<dd><ul>{#each identity.decorativeElements as elem}<li>{elem}</li>{/each}</ul></dd>
+						{/if}
+						{#if identity.approximateProportions}<dt>Proportions</dt><dd>{identity.approximateProportions}</dd>{/if}
+						{#if identity.surfaceNotes}<dt>Surface</dt><dd>{identity.surfaceNotes}</dd>{/if}
+					</dl>
+				{:else}
+					<p>{piece.ai_description}</p>
+				{/if}
 			</details>
 		{/if}
 
@@ -262,6 +286,34 @@
 		color: #7a5c4e;
 		line-height: 1.5;
 		white-space: pre-wrap;
+	}
+
+	.identity-card {
+		display: grid;
+		grid-template-columns: auto 1fr;
+		gap: 0.25rem 0.75rem;
+		margin-top: 0.5rem;
+		font-size: 0.8125rem;
+		color: #7a5c4e;
+		line-height: 1.5;
+	}
+
+	.identity-card dt {
+		font-weight: 600;
+		color: #5a4035;
+	}
+
+	.identity-card dd {
+		margin: 0;
+	}
+
+	.identity-card ul {
+		margin: 0;
+		padding-left: 1.25rem;
+	}
+
+	.identity-card li {
+		margin: 0;
 	}
 
 	.piece-meta {

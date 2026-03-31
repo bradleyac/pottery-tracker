@@ -35,7 +35,7 @@ This is a pottery-tracking app. Users upload photos; Claude Vision matches them 
 - **All DB queries are in `+page.server.ts` load functions** — no client-side DB access
 - **Signed URLs generated server-side** with service-role key, never on the client. Bucket `pottery-images` has RLS; all access goes through signed URLs
 - **Claude image preprocessing**: images are resized to ≤512px via `sharp` before sending to Claude to control token costs (~100 tokens vs ~4000 for full-res). Originals stored at full resolution.
-- **Two Claude models**: `claude-sonnet-4-6` for matching (vision + reasoning), `claude-haiku-4-5-20251001` for initial descriptions (cheaper)
+- **Gemini Flash**: `gemini-2.5-flash` for both matching and descriptions (vision + reasoning, much cheaper than Claude for vision tasks)
 
 ### UI patterns
 
@@ -82,5 +82,5 @@ Tests use **Storybook 10 + `@storybook/addon-vitest`** running in headless Playw
 PUBLIC_SUPABASE_URL
 PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
-ANTHROPIC_API_KEY
+GEMINI_API_KEY
 ```

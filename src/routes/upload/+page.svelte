@@ -1,11 +1,18 @@
 <script lang="ts">
-	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
-	import MatchConfirmDialog from '$lib/components/MatchConfirmDialog.svelte';
-	import type { ConfirmData } from '$lib/components/MatchConfirmDialog.svelte';
-	import type { MatchResultWithPiece, PieceSummary } from '$lib/types';
 	import { goto } from '$app/navigation';
+	import type { ConfirmData } from '$lib/components/MatchConfirmDialog.svelte';
+	import MatchConfirmDialog from '$lib/components/MatchConfirmDialog.svelte';
+	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
+	import type { MatchResultWithPiece, PieceSummary } from '$lib/types';
 
-	type Step = 'idle' | 'uploading' | 'ai_thinking' | 'confirming' | 'saving' | 'done' | 'bulk_uploading';
+	type Step =
+		| 'idle'
+		| 'uploading'
+		| 'ai_thinking'
+		| 'confirming'
+		| 'saving'
+		| 'done'
+		| 'bulk_uploading';
 
 	let step = $state<Step>('idle');
 	let errorMsg = $state<string | null>(null);
@@ -62,11 +69,13 @@
 			updatedDescription: data.updatedDescription,
 			storagePath: data.tempPath
 		};
-		allPieces = (data.pieces ?? []).map((p: { id: string; name: string; cover_url?: string | null }) => ({
-			id: p.id,
-			name: p.name,
-			cover_url: p.cover_url ?? null
-		}));
+		allPieces = (data.pieces ?? []).map(
+			(p: { id: string; name: string; cover_url?: string | null }) => ({
+				id: p.id,
+				name: p.name,
+				cover_url: p.cover_url ?? null
+			})
+		);
 
 		step = 'confirming';
 	}
@@ -99,10 +108,7 @@
 		await goto('/review');
 	}
 
-	async function handleConfirm(
-		action: 'accepted' | 'overridden' | 'new_piece',
-		data: ConfirmData
-	) {
+	async function handleConfirm(action: 'accepted' | 'overridden' | 'new_piece', data: ConfirmData) {
 		if (!matchResult) return;
 		step = 'saving';
 		errorMsg = null;
@@ -187,7 +193,6 @@
 
 	{#if step === 'idle'}
 		<UploadDropzone onfiles={handleFiles} />
-
 	{:else if step === 'uploading'}
 		<div class="status-card">
 			<div class="spinner"></div>
@@ -196,7 +201,6 @@
 				<img src={previewUrl} alt="Preview" class="upload-preview" />
 			{/if}
 		</div>
-
 	{:else if step === 'ai_thinking'}
 		<div class="status-card">
 			<div class="spinner"></div>
@@ -205,28 +209,21 @@
 				<img src={previewUrl} alt="Preview" class="upload-preview" />
 			{/if}
 		</div>
-
 	{:else if step === 'bulk_uploading'}
 		<div class="status-card">
 			<div class="spinner"></div>
 			<p>Uploading {bulkCount} photo{bulkCount !== 1 ? 's' : ''}…</p>
-			<p class="status-sub">Claude will analyze them in the background. You'll be redirected to review.</p>
+			<p class="status-sub">
+				Claude will analyze them in the background. You'll be redirected to review.
+			</p>
 		</div>
-
 	{:else if step === 'confirming' && matchResult && previewUrl}
-		<MatchConfirmDialog
-			{previewUrl}
-			{matchResult}
-			pieces={allPieces}
-			onconfirm={handleConfirm}
-		/>
-
+		<MatchConfirmDialog {previewUrl} {matchResult} pieces={allPieces} onconfirm={handleConfirm} />
 	{:else if step === 'saving'}
 		<div class="status-card">
 			<div class="spinner"></div>
 			<p>Saving your photo…</p>
 		</div>
-
 	{:else if step === 'done'}
 		<div class="done-card">
 			<span class="done-icon">✓</span>
@@ -314,7 +311,9 @@
 	}
 
 	@keyframes spin {
-		to { transform: rotate(360deg); }
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	.done-card {
@@ -371,7 +370,9 @@
 		transition: background 0.15s;
 	}
 
-	.btn-primary:hover { background: #a8521f; }
+	.btn-primary:hover {
+		background: #a8521f;
+	}
 
 	.btn-secondary {
 		display: block;
@@ -399,5 +400,7 @@
 		font-size: 0.875rem;
 	}
 
-	.btn-ghost:hover { color: #4a3728; }
+	.btn-ghost:hover {
+		color: #4a3728;
+	}
 </style>

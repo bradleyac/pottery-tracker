@@ -1,11 +1,11 @@
-import UploadDropZone from '$lib/components/UploadDropZone.svelte';
+import UploadDropzone from '$lib/components/UploadDropzone.svelte';
 import type { Meta, StoryObj } from '@storybook/sveltekit';
-import { expect, fireEvent, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import { MINIMAL_VIEWPORTS } from 'storybook/viewport';
 
 const meta = {
-	title: 'Components/UploadDropZone',
-	component: UploadDropZone,
+	title: 'Components/UploadDropzone',
+	component: UploadDropzone,
 	tags: ['autodocs'],
 	argTypes: {
 		onfiles: { action: 'onfiles' }
@@ -15,7 +15,7 @@ const meta = {
 			options: MINIMAL_VIEWPORTS
 		}
 	}
-} satisfies Meta<typeof UploadDropZone>;
+} satisfies Meta<typeof UploadDropzone>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
