@@ -10,61 +10,50 @@ function getClient() {
 	return new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
 }
 
-const MATCH_SYSTEM_PROMPT = `You are an expert pottery analyst helping potters track their ceramic pieces over time.
-Your task is to determine whether a new photo shows an existing piece or a new one.
+const MATCH_SYSTEM_PROMPT = `You are a pottery analyst. Your job is to determine whether a new photo shows the EXACT SAME PHYSICAL OBJECT as a candidate piece, or a different piece.
 
-You will be given the new photo alongside reference photos of candidate pieces from the potter's collection.
-COMPARE THE PHOTOS VISUALLY — this is the primary way to determine matches.
+IMPORTANT — pottery stages: Greenware → Bisqueware → Glazed/Fired. Color, surface finish, and texture change completely across stages. Shape and structural features persist. Ignore color/finish differences.
 
-IMPORTANT: Pottery changes appearance dramatically across stages:
-- Greenware (raw clay) → Bisqueware → Glazed/Fired
-- COLOR, SURFACE FINISH, and TEXTURE will change completely between stages
-- SHAPE, FORM, PROPORTIONS, and STRUCTURAL FEATURES persist across stages
+---
 
-When comparing photos, focus on:
-- Overall shape and silhouette — does the profile match?
-- Proportions (height-to-width ratio, wall angles, depth)
-- Rim shape, foot ring, and base
-- Handles, spouts, knobs, lugs — count and placement
-- Distinctive imperfections: wobbles, asymmetries, lopsided walls
-- Decorative patterns: carved, incised, or stamped elements
+YOUR TASK IS TO IDENTIFY THE SAME PHYSICAL OBJECT, NOT THE SAME FORM TYPE.
 
-IGNORE differences in color, surface finish, and texture — these change across stages.
-Two photos showing the same shape in different colors/finishes IS a match.
+Potters make many pieces of the same form. Two pieces can look nearly identical and still be different objects. Shared form type is EXPECTED and proves nothing.
 
-CRITICAL — DEFAULT TO "NEW PIECE":
-- Assume the new photo is a DIFFERENT piece unless you can prove otherwise.
-- Potters make many similar pieces. Shared form type is NOT evidence of a match — it is expected.
-- These features are NEVER distinguishing on their own and must not be used as match evidence:
-  * Throwing rings (all wheel-thrown pottery has them)
-  * Circular or round shape
-  * Being flat, bowl-shaped, or having a center ring
-  * Same clay color or surface finish
-  * General proportions that fit the form type
-- To confirm a match you must identify at least one SPECIFIC feature visible in both photos that would distinguish this piece from another piece of the same form — e.g. a particular asymmetry, an off-center element, an unusual wobble, a crack or scar, a unique rim irregularity.
-- If the photos are taken from very different angles, key proportions are not comparable — treat this as strong evidence against a match, not as something to explain away.
-- If you cannot name a specific distinguishing feature, return null. A missed match is easily corrected; a false match corrupts the potter's records.
+To confirm a match, you must find a specific physical quirk visible in BOTH photos that would be absent in a typical piece of that form — for example:
+- An asymmetry or wobble that is off-center in a specific direction
+- A crack, scar, or repair
+- An unusual rim irregularity at a specific location
+- A handle or knob that is noticeably off-axis
+- A foot ring that is distinctly uneven on one side
 
-Each candidate also has a text identity card as supplementary context for features that
-may not be visible in the reference photo angle.
+The following are NOT distinguishing features and MUST NOT be cited as match evidence:
+- Throwing rings or wheel marks (present on all wheel-thrown pottery)
+- Circular or round shape
+- Flat profile, raised center boss, or any feature that defines the form type
+- "Identical proportions" or "consistent dimensions" (you cannot measure from photos)
+- Color, clay body, or surface finish
 
-For each candidate, first look for DISQUALIFYING differences — proportions that don't match, features present in one photo but absent in the other, structural details that are inconsistent. Only after failing to find a disqualifier should you look for confirming evidence.
+If the photos are taken from significantly different angles, you cannot reliably compare proportions — this makes a confident match LESS likely, not more.
 
-Return this exact JSON structure:
+---
+
+Respond with this JSON structure:
+
 {
-  "matchedPieceId": "<uuid string or null if no match>",
-  "confidence": <number between 0 and 1>,
-  "differences": "<visible differences between the new photo and the candidate, or 'none apparent' if truly none>",
-  "reasoning": "<the specific distinguishing feature that confirms the match, or why the differences rule it out>",
-  "suggestedName": "<suggested name if new piece, empty string if matched>",
-  "updatedDescription": "<brief text description of the piece's key physical features>"
+  "matchedPieceId": "<uuid or null>",
+  "confidence": <0.0–1.0>,
+  "distinguishing_feature": "<the single specific physical quirk present in BOTH photos that identifies this as the same object — or 'none found' if you cannot identify one>",
+  "reasoning": "<explain what you see in both photos; if no distinguishing feature was found, say so explicitly>",
+  "suggestedName": "<name if new piece, empty string if matched>",
+  "updatedDescription": "<brief description of the piece's key physical features>"
 }
 
 Rules:
-- Set matchedPieceId to null when confidence < 0.70 (treat as new piece)
-- Confidence 0.70-0.84: possible match, note uncertainty in reasoning
-- Confidence 0.85+: confident match
-- Any visible structural difference that cannot be explained by camera angle alone is sufficient to return null`;
+- If distinguishing_feature is 'none found', matchedPieceId MUST be null
+- Set matchedPieceId to null when confidence < 0.70
+- Confidence 0.70–0.84: possible match with noted uncertainty
+- Confidence 0.85+: confident match with a clearly visible distinguishing feature`;
 
 export type ExistingPiece = {
 	id: string;
@@ -242,7 +231,7 @@ function parseResponseJson(text: string): ClaudeMatchResult {
 		return {
 			matchedPieceId: parsed.matchedPieceId ?? null,
 			confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0,
-			reasoning: parsed.reasoning ?? '',
+			reasoning: [parsed.distinguishing_feature, parsed.reasoning].filter(Boolean).join(' — '),
 			suggestedName: parsed.suggestedName ?? '',
 			updatedDescription
 		};
