@@ -78,6 +78,7 @@ interface PendingUploadRecord {
 	user_id: string;
 	temp_storage_path: string;
 }
+
 interface WebhookPayload {
 	type: string;
 	record: PendingUploadRecord;
