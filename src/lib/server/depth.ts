@@ -37,26 +37,36 @@ export async function generateDepthMap(imageBuffer: Buffer): Promise<Buffer> {
 
 	const base64 = cropped.toString('base64');
 
-	const createResp = await fetch('https://api.replicate.com/v1/predictions', {
-		method: 'POST',
-		headers: {
-			Authorization: `Bearer ${token}`,
-			'Content-Type': 'application/json',
-			Prefer: 'wait'
-		},
-		body: JSON.stringify({
-			version,
-			input: { image: `data:image/jpeg;base64,${base64}`, model_size: 'Base' }
-		}),
-		signal: AbortSignal.timeout(90_000)
-	});
+	let createResp: Response | null = null;
+	for (let attempt = 0; attempt < 5; attempt++) {
+		createResp = await fetch('https://api.replicate.com/v1/predictions', {
+			method: 'POST',
+			headers: {
+				Authorization: `Bearer ${token}`,
+				'Content-Type': 'application/json',
+				Prefer: 'wait'
+			},
+			body: JSON.stringify({
+				version,
+				input: { image: `data:image/jpeg;base64,${base64}`, model_size: 'Base' }
+			}),
+			signal: AbortSignal.timeout(90_000)
+		});
 
-	if (!createResp.ok) {
-		const text = await createResp.text();
-		throw new Error(`Replicate prediction failed ${createResp.status}: ${text}`);
+		if (createResp.status !== 429) break;
+
+		const retryBody = await createResp.json().catch(() => ({}));
+		const waitMs = ((retryBody.retry_after ?? 1) + 1) * 1000;
+		console.log(`[depth] Replicate rate limited, retrying in ${waitMs}ms (attempt ${attempt + 1})`);
+		await new Promise((resolve) => setTimeout(resolve, waitMs));
 	}
 
-	const prediction = await createResp.json();
+	if (!createResp!.ok) {
+		const text = await createResp!.text();
+		throw new Error(`Replicate prediction failed ${createResp!.status}: ${text}`);
+	}
+
+	const prediction = await createResp!.json();
 	if (prediction.status === 'failed') {
 		throw new Error(`Replicate prediction failed: ${prediction.error}`);
 	}

@@ -142,20 +142,28 @@ async function generateDepthMap(
 	const croppedBase64 = await cropToBounds(imageBase64, geminiKey).catch(() => imageBase64);
 
 	const version = Deno.env.get('REPLICATE_DEPTH_MODEL') ?? DEFAULT_DEPTH_VERSION;
-	const createResp = await fetch('https://api.replicate.com/v1/predictions', {
-		method: 'POST',
-		headers: {
-			Authorization: `Bearer ${replicateToken}`,
-			'Content-Type': 'application/json',
-			Prefer: 'wait'
-		},
-		body: JSON.stringify({
-			version,
-			input: { image: `data:image/jpeg;base64,${croppedBase64}`, model_size: 'Base' }
-		}),
-		signal: AbortSignal.timeout(90_000)
-	});
-	if (!createResp.ok) return null;
+	let createResp: Response | null = null;
+	for (let attempt = 0; attempt < 5; attempt++) {
+		createResp = await fetch('https://api.replicate.com/v1/predictions', {
+			method: 'POST',
+			headers: {
+				Authorization: `Bearer ${replicateToken}`,
+				'Content-Type': 'application/json',
+				Prefer: 'wait'
+			},
+			body: JSON.stringify({
+				version,
+				input: { image: `data:image/jpeg;base64,${croppedBase64}`, model_size: 'Base' }
+			}),
+			signal: AbortSignal.timeout(90_000)
+		});
+		if (createResp.status !== 429) break;
+		const retryBody = await createResp.json().catch(() => ({}));
+		const waitMs = ((retryBody.retry_after ?? 1) + 1) * 1000;
+		console.log(`[analyze-pending] Replicate rate limited, retrying in ${waitMs}ms (attempt ${attempt + 1})`);
+		await new Promise((resolve) => setTimeout(resolve, waitMs));
+	}
+	if (!createResp!.ok) return null;
 
 	const prediction = await createResp.json();
 	if (prediction.status === 'failed') return null;
