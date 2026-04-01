@@ -38,11 +38,20 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 				const uuid = randomUUID();
 				const tempPath = `${user.id}/temp/${uuid}.jpg`;
 				const depthPath = `${user.id}/temp/depth_${uuid}.jpg`;
-				await uploadImage(buffer, tempPath, 'image/jpeg');
-				// Generate and store depth map so the edge function doesn't have to call Replicate
-				generateDepthMap(buffer)
-					.then((depthBuffer) => uploadImage(depthBuffer, depthPath, 'image/jpeg'))
-					.catch((err) => console.error(`[bulk-upload] depth map failed for ${uuid}:`, err));
+				// Generate depth map and upload image in parallel, depth map must be
+				// stored before we insert the pending_uploads row so the edge function
+				// finds it immediately on trigger.
+				const [depthBuffer] = await Promise.allSettled([
+					generateDepthMap(buffer),
+					uploadImage(buffer, tempPath, 'image/jpeg')
+				]);
+				if (depthBuffer.status === 'fulfilled') {
+					await uploadImage(depthBuffer.value, depthPath, 'image/jpeg').catch((err) =>
+						console.error(`[bulk-upload] depth map upload failed for ${uuid}:`, err)
+					);
+				} else {
+					console.error(`[bulk-upload] depth map generation failed for ${uuid}:`, depthBuffer.reason);
+				}
 				return { ok: true as const, filename: file.name, tempPath };
 			} catch {
 				return { ok: false as const, filename: file.name, reason: 'Upload failed' };
