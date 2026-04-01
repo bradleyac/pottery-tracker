@@ -1,8 +1,11 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { Jimp } from 'https://esm.sh/jimp@1';
 import {
 	MATCH_SYSTEM_PROMPT,
 	DESCRIBE_SYSTEM_PROMPT,
+	BOUNDS_PROMPT,
 	parseResponseJson,
+	parseBoundsResponse,
 	buildMatchingParts,
 	type MatchResult,
 	type MatchCandidate
@@ -82,7 +85,62 @@ async function generateEmbedding(apiKey: string, imageBase64: string): Promise<n
 const DEFAULT_DEPTH_VERSION =
 	'chenxwh/depth-anything-v2:b239ea33cff32bb7abb5db39ffe9a09c14cbc2894331d1ef66fe096eed88ebd4';
 
-async function generateDepthMap(replicateToken: string, imageBase64: string): Promise<string | null> {
+async function cropToBounds(
+	imageBase64: string,
+	geminiKey: string
+): Promise<string> {
+	// Detect piece bounds via Gemini
+	const boundsResp = await fetch(
+		`${GEMINI_API_BASE}/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+		{
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				contents: [{
+					role: 'user',
+					parts: [
+						{ inlineData: { mimeType: 'image/jpeg', data: imageBase64 } },
+						{ text: BOUNDS_PROMPT }
+					]
+				}],
+				generationConfig: { responseMimeType: 'application/json' }
+			})
+		}
+	);
+
+	if (!boundsResp.ok) return imageBase64;
+
+	const boundsData = await boundsResp.json();
+	const boundsText: string = boundsData.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+	const bounds = parseBoundsResponse(boundsText);
+	if (!bounds) return imageBase64;
+
+	// Crop using jimp
+	try {
+		const PAD = 0.05;
+		const imgBytes = Uint8Array.from(atob(imageBase64), (c) => c.charCodeAt(0));
+		const image = await Jimp.fromBuffer(imgBytes.buffer);
+		const w = image.width;
+		const h = image.height;
+		const left = Math.max(0, Math.floor((bounds.x1 - PAD) * w));
+		const top = Math.max(0, Math.floor((bounds.y1 - PAD) * h));
+		const right = Math.min(w, Math.ceil((bounds.x2 + PAD) * w));
+		const bottom = Math.min(h, Math.ceil((bounds.y2 + PAD) * h));
+		image.crop({ x: left, y: top, w: right - left, h: bottom - top });
+		const croppedBuffer = await image.getBuffer('image/jpeg');
+		return btoa(String.fromCharCode(...new Uint8Array(croppedBuffer)));
+	} catch {
+		return imageBase64;
+	}
+}
+
+async function generateDepthMap(
+	replicateToken: string,
+	imageBase64: string,
+	geminiKey: string
+): Promise<string | null> {
+	const croppedBase64 = await cropToBounds(imageBase64, geminiKey).catch(() => imageBase64);
+
 	const version = Deno.env.get('REPLICATE_DEPTH_MODEL') ?? DEFAULT_DEPTH_VERSION;
 	const createResp = await fetch('https://api.replicate.com/v1/predictions', {
 		method: 'POST',
@@ -93,7 +151,7 @@ async function generateDepthMap(replicateToken: string, imageBase64: string): Pr
 		},
 		body: JSON.stringify({
 			version,
-			input: { image: `data:image/jpeg;base64,${imageBase64}`, model_size: 'Base' }
+			input: { image: `data:image/jpeg;base64,${croppedBase64}`, model_size: 'Base' }
 		}),
 		signal: AbortSignal.timeout(90_000)
 	});
@@ -167,7 +225,7 @@ Deno.serve(async (req: Request) => {
 		const [embedding] = await Promise.all([
 			generateEmbedding(geminiKey, imageBase64),
 			newDepthBase64 === null && replicateToken
-				? generateDepthMap(replicateToken, imageBase64)
+				? generateDepthMap(replicateToken, imageBase64, geminiKey)
 					.then((b) => { newDepthBase64 = b; })
 					.catch((err) => { console.error('[analyze-pending] Replicate depth map failed:', err); })
 				: Promise.resolve()

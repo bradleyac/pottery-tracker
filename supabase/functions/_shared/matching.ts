@@ -1,6 +1,39 @@
-// Shared matching logic — pure TypeScript, no Node or Deno APIs.
+// Shared matching + bounds-detection logic — pure TypeScript, no Node or Deno APIs.
 // Imported by both the SvelteKit server (src/lib/server/claude.ts) and the
 // Supabase edge function (supabase/functions/analyze-pending/index.ts).
+
+export interface BoundingBox {
+	x1: number;
+	y1: number;
+	x2: number;
+	y2: number;
+}
+
+export const BOUNDS_PROMPT =
+	'Find the main pottery piece in this image. Return a JSON object with its bounding box as fractions of image dimensions (0 to 1): {"x1": <left>, "y1": <top>, "x2": <right>, "y2": <bottom>}. If no pottery piece is clearly visible, return {"x1": 0, "y1": 0, "x2": 1, "y2": 1}.';
+
+export function parseBoundsResponse(text: string): BoundingBox | null {
+	try {
+		const cleaned = text.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim();
+		const b = JSON.parse(cleaned);
+		if (
+			typeof b.x1 === 'number' &&
+			typeof b.y1 === 'number' &&
+			typeof b.x2 === 'number' &&
+			typeof b.y2 === 'number'
+		) {
+			return {
+				x1: Math.max(0, b.x1),
+				y1: Math.max(0, b.y1),
+				x2: Math.min(1, b.x2),
+				y2: Math.min(1, b.y2)
+			};
+		}
+	} catch {
+		// Fall through
+	}
+	return null;
+}
 
 export interface MatchResult {
 	matchedPieceId: string | null;

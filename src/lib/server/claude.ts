@@ -5,7 +5,9 @@ import { env } from '$env/dynamic/private';
 import {
 	MATCH_SYSTEM_PROMPT,
 	DESCRIBE_SYSTEM_PROMPT,
+	BOUNDS_PROMPT,
 	parseResponseJson,
+	parseBoundsResponse,
 	buildMatchingParts
 } from '../../../supabase/functions/_shared/matching.js';
 
@@ -131,43 +133,19 @@ export async function detectPieceBounds(
 
 	const response = await getClient().models.generateContent({
 		model: DESCRIBE_MODEL,
-		config: {
-			responseMimeType: 'application/json'
-		},
+		config: { responseMimeType: 'application/json' },
 		contents: [
 			{
 				role: 'user',
 				parts: [
 					{ inlineData: { mimeType, data: base64Image } },
-					{
-						text: 'Find the main pottery piece in this image. Return a JSON object with its bounding box as fractions of image dimensions (0 to 1): {"x1": <left>, "y1": <top>, "x2": <right>, "y2": <bottom>}. If no pottery piece is clearly visible, return {"x1": 0, "y1": 0, "x2": 1, "y2": 1}.'
-					}
+					{ text: BOUNDS_PROMPT }
 				]
 			}
 		]
 	});
 
-	try {
-		const text = response.text ?? '';
-		const cleaned = text.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim();
-		const b = JSON.parse(cleaned);
-		if (
-			typeof b.x1 === 'number' &&
-			typeof b.y1 === 'number' &&
-			typeof b.x2 === 'number' &&
-			typeof b.y2 === 'number'
-		) {
-			return {
-				x1: Math.max(0, b.x1),
-				y1: Math.max(0, b.y1),
-				x2: Math.min(1, b.x2),
-				y2: Math.min(1, b.y2)
-			};
-		}
-	} catch {
-		// Fall through
-	}
-	return null;
+	return parseBoundsResponse(response.text ?? '');
 }
 
 export async function describeNewPiece(
