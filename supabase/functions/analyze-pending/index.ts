@@ -14,29 +14,25 @@ YOUR TASK IS TO IDENTIFY THE SAME PHYSICAL OBJECT, NOT THE SAME FORM TYPE.
 
 Potters make many pieces of the same form. Two pieces can look nearly identical and still be different objects. Shared form type is EXPECTED and proves nothing.
 
-STEP 1 — DESCRIBE THE PROFILE SHAPE OF EACH STRUCTURAL ELEMENT in both photos.
-For every structural element visible (rim, center ring, boss, handle, foot ring, wall), describe its specific cross-section profile:
-- Is the rim rolled, flat, tapered, flared outward, or folded inward?
-- Is the center ring/boss domed, flat-topped, flared, or cylindrical with a sharp edge?
-- Are the walls straight, curved inward, curved outward, or stepped?
+You will be given the new photo and, alongside each candidate, a DEPTH MAP. Depth maps encode 3D surface geometry: brighter pixels are closer to the camera, darker pixels are further away. The gradient patterns directly reveal surface profile shapes — slopes, curves, ridges, and the cross-section of structural elements like rims and rings.
 
-These profile shapes are persistent across all pottery stages and visible from almost any angle that shows the element. A flared ring and a domed ring are different pieces even if both are "raised center rings."
+STEP 1 — COMPARE DEPTH MAPS. For each candidate, compare the depth map of the new photo against the candidate's depth map:
+- What is the profile shape of the outer rim? (flat, upturned, drooping — look at the gradient at the edge)
+- What is the profile of the center ring or boss? (flat-topped, domed, flared outward, cylindrical — look at the highlight shape on top of the ring)
+- How does the main surface transition? (flat, gently concave, steeply concave — look at the gradient between rim and center)
+- Are there any steps, ridges, or abrupt transitions?
 
-STEP 2 — COMPARE THE PROFILES. If any structural element has a different profile shape between the two photos, they are different pieces. Return null.
+A flat-topped ring shows a uniform bright plateau. A domed ring shows a rounded bright highlight fading to the sides. A flared ring shows a bright edge that curves outward. These are visually distinct in a depth map.
 
-STEP 3 — Only if profiles match, look for a specific distinguishing quirk that confirms it is the exact same object (an asymmetry, crack, off-center element, rim irregularity at a specific location).
+STEP 2 — If any structural element has a clearly different depth profile between the new photo and a candidate, they are DIFFERENT PIECES. Return null for that candidate.
+
+STEP 3 — Only if depth profiles match, look for a specific distinguishing quirk that confirms it is the exact same object (an asymmetry, off-center element, irregularity at a specific location visible in the depth map or RGB photo).
 
 The following are NOT distinguishing features and MUST NOT be cited as match evidence:
-- Throwing rings or wheel marks (present on all wheel-thrown pottery)
+- Throwing rings or wheel marks
 - Circular or round shape
-- The mere presence of a rim, center ring, handle, or any element that defines the form type
-- "Identical proportions" or "consistent dimensions" (you cannot measure from photos)
+- The mere presence of a rim, center ring, or any element that defines the form type
 - Color, clay body, or surface finish
-
-ANGLE ASSESSMENT — do this first:
-Compare the camera angle of the new photo to the candidate's reference photo. Classify each as one of: top-down, oblique (angled from above), side profile, or three-quarter.
-
-If the two photos are from different angle categories, you CANNOT reliably confirm that a feature seen in one photo is the same feature seen in the other. A dip on a rim looks completely different from above vs. from the side. In this case, confidence MUST be below 0.70 — do not claim a match.
 
 ---
 
@@ -45,21 +41,19 @@ Respond with this JSON structure:
 {
   "matchedPieceId": "<uuid or null>",
   "confidence": <0.0–1.0>,
-  "new_photo_angle": "<top-down | oblique | side profile | three-quarter>",
-  "candidate_angle": "<top-down | oblique | side profile | three-quarter>",
-  "profile_comparison": "<describe the profile shape of each structural element in both photos, and whether they match>",
-  "distinguishing_feature": "<a specific quirk visible in both photos confirming same object — or 'none found' — or 'profile mismatch' if profiles differ>",
-  "reasoning": "<what you see; cite specific profile shapes or quirks; if profiles differ or no distinguishing feature was found, say so explicitly>",
+  "depth_comparison": "<describe what the depth maps reveal about the profile shapes of each structural element, and whether they match>",
+  "distinguishing_feature": "<a specific quirk visible in both depth maps or photos confirming same object — or 'none found' — or 'profile mismatch' if depth profiles differ>",
+  "reasoning": "<cite specific depth map observations; if profiles differ or no distinguishing feature was found, say so explicitly>",
   "suggestedName": "<name if new piece, empty string if matched>",
   "updatedDescription": "<brief description of the piece's key physical features>"
 }
 
 Rules:
-- If new_photo_angle and candidate_angle differ, confidence MUST be < 0.70 (return null)
+- If distinguishing_feature is 'profile mismatch', matchedPieceId MUST be null
 - If distinguishing_feature is 'none found', matchedPieceId MUST be null
 - Set matchedPieceId to null when confidence < 0.70
 - Confidence 0.70–0.84: possible match with noted uncertainty
-- Confidence 0.85+: confident match with a clearly visible distinguishing feature in both photos`;
+- Confidence 0.85+: confident match with a clearly visible distinguishing feature`;
 
 const DESCRIBE_SYSTEM_PROMPT = `You are an expert pottery analyst. Describe this pottery piece's key physical features
 in a brief text summary. This description serves as supplementary context alongside photos for matching.
@@ -154,22 +148,36 @@ async function generateEmbedding(apiKey: string, imageBase64: string): Promise<n
 	return data.embedding?.values ?? [];
 }
 
-async function generateDepthMap(hfToken: string, imageBase64: string): Promise<string | null> {
-	const resp = await fetch(
-		'https://api-inference.huggingface.co/models/depth-anything/Depth-Anything-V2-Small-hf',
-		{
-			method: 'POST',
-			headers: {
-				Authorization: `Bearer ${hfToken}`,
-				'Content-Type': 'application/json',
-				'x-wait-for-model': 'true'
-			},
-			body: JSON.stringify({ inputs: imageBase64 }),
-			signal: AbortSignal.timeout(120_000)
-		}
-	);
-	if (!resp.ok) return null;
-	const bytes = await resp.arrayBuffer();
+const DEFAULT_DEPTH_VERSION =
+	'chenxwh/depth-anything-v2:b239ea33cff32bb7abb5db39ffe9a09c14cbc2894331d1ef66fe096eed88ebd4';
+
+async function generateDepthMap(replicateToken: string, imageBase64: string): Promise<string | null> {
+	const version = Deno.env.get('REPLICATE_DEPTH_MODEL') ?? DEFAULT_DEPTH_VERSION;
+	const createResp = await fetch('https://api.replicate.com/v1/predictions', {
+		method: 'POST',
+		headers: {
+			Authorization: `Bearer ${replicateToken}`,
+			'Content-Type': 'application/json',
+			Prefer: 'wait'
+		},
+		body: JSON.stringify({
+			version,
+			input: { image: `data:image/jpeg;base64,${imageBase64}`, model_size: 'Base' }
+		}),
+		signal: AbortSignal.timeout(90_000)
+	});
+	if (!createResp.ok) return null;
+
+	const prediction = await createResp.json();
+	if (prediction.status === 'failed') return null;
+
+	const outputUrl: string = prediction.output?.grey_depth;
+	if (!outputUrl) return null;
+
+	const imgResp = await fetch(outputUrl, { signal: AbortSignal.timeout(30_000) });
+	if (!imgResp.ok) return null;
+
+	const bytes = await imgResp.arrayBuffer();
 	return btoa(String.fromCharCode(...new Uint8Array(bytes)));
 }
 
@@ -214,7 +222,7 @@ Deno.serve(async (req: Request) => {
 	const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 	const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 	const geminiKey = Deno.env.get('GEMINI_API_KEY')!;
-	const hfToken = Deno.env.get('HUGGINGFACE_TOKEN') ?? '';
+	const replicateToken = Deno.env.get('REPLICATE_API_TOKEN') ?? '';
 
 	const supabase = createClient(supabaseUrl, serviceRoleKey);
 
@@ -244,7 +252,7 @@ Deno.serve(async (req: Request) => {
 		// Generate embedding and depth map in parallel
 		const [embedding, newDepthBase64] = await Promise.all([
 			generateEmbedding(geminiKey, imageBase64),
-			hfToken ? generateDepthMap(hfToken, imageBase64) : Promise.resolve(null)
+			replicateToken ? generateDepthMap(replicateToken, imageBase64) : Promise.resolve(null)
 		]);
 
 		let result: MatchResult;
