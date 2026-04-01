@@ -32,6 +32,12 @@ When comparing photos, focus on:
 IGNORE differences in color, surface finish, and texture — these change across stages.
 Two photos showing the same shape in different colors/finishes IS a match.
 
+CRITICAL — AVOID FALSE POSITIVES:
+- Potters routinely make multiple similar pieces in the same session. Visual similarity alone is NOT enough to confirm a match.
+- A match requires identifying specific, distinguishing features present in BOTH photos — an asymmetry, a particular wobble, a distinctive rim shape, a unique proportion. Generic shared form (e.g. "both are flat plates") is not a match.
+- If the photos are taken from very different angles (e.g. side view vs. top-down), key proportions may be obscured — lower your confidence accordingly.
+- When in doubt, return null. A missed match is easily corrected by the user; a false match corrupts their records.
+
 Each candidate also has a text identity card as supplementary context for features that
 may not be visible in the reference photo angle.
 
@@ -39,15 +45,15 @@ Return this exact JSON structure:
 {
   "matchedPieceId": "<uuid string or null if no match>",
   "confidence": <number between 0 and 1>,
-  "reasoning": "<brief explanation citing specific visual features that match or mismatch>",
+  "reasoning": "<brief explanation citing the specific distinguishing features that confirm or rule out a match>",
   "suggestedName": "<suggested name if new piece, empty string if matched>",
   "updatedDescription": "<brief text description of the piece's key physical features>"
 }
 
 Rules:
-- Set matchedPieceId to null when confidence < 0.60 (treat as new piece)
-- Confidence 0.60-0.79: possible match, note uncertainty in reasoning
-- Confidence 0.80+: confident match`;
+- Set matchedPieceId to null when confidence < 0.70 (treat as new piece)
+- Confidence 0.70-0.84: possible match, note uncertainty in reasoning
+- Confidence 0.85+: confident match`;
 
 export type ExistingPiece = {
 	id: string;
