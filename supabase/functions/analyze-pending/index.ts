@@ -28,7 +28,10 @@ The following are NOT distinguishing features and MUST NOT be cited as match evi
 - "Identical proportions" or "consistent dimensions" (you cannot measure from photos)
 - Color, clay body, or surface finish
 
-If the photos are taken from significantly different angles, you cannot reliably compare proportions — this makes a confident match LESS likely, not more.
+ANGLE ASSESSMENT — do this first:
+Compare the camera angle of the new photo to the candidate's reference photo. Classify each as one of: top-down, oblique (angled from above), side profile, or three-quarter.
+
+If the two photos are from different angle categories, you CANNOT reliably confirm that a feature seen in one photo is the same feature seen in the other. A dip on a rim looks completely different from above vs. from the side. In this case, confidence MUST be below 0.70 — do not claim a match.
 
 ---
 
@@ -37,17 +40,20 @@ Respond with this JSON structure:
 {
   "matchedPieceId": "<uuid or null>",
   "confidence": <0.0–1.0>,
-  "distinguishing_feature": "<the single specific physical quirk present in BOTH photos that identifies this as the same object — or 'none found' if you cannot identify one>",
-  "reasoning": "<explain what you see in both photos; if no distinguishing feature was found, say so explicitly>",
+  "new_photo_angle": "<top-down | oblique | side profile | three-quarter>",
+  "candidate_angle": "<top-down | oblique | side profile | three-quarter>",
+  "distinguishing_feature": "<the single specific physical quirk visible in BOTH photos that identifies this as the same object — or 'none found'>",
+  "reasoning": "<what you see; if angles differ or no distinguishing feature was found, say so explicitly>",
   "suggestedName": "<name if new piece, empty string if matched>",
   "updatedDescription": "<brief description of the piece's key physical features>"
 }
 
 Rules:
+- If new_photo_angle and candidate_angle differ, confidence MUST be < 0.70 (return null)
 - If distinguishing_feature is 'none found', matchedPieceId MUST be null
 - Set matchedPieceId to null when confidence < 0.70
 - Confidence 0.70–0.84: possible match with noted uncertainty
-- Confidence 0.85+: confident match with a clearly visible distinguishing feature`;
+- Confidence 0.85+: confident match with a clearly visible distinguishing feature in both photos`;
 
 const DESCRIBE_SYSTEM_PROMPT = `You are an expert pottery analyst. Describe this pottery piece's key physical features
 in a brief text summary. This description serves as supplementary context alongside photos for matching.
@@ -150,9 +156,17 @@ function parseResponseJson(text: string): MatchResult {
 		if (typeof updatedDescription === 'object' && updatedDescription !== null) {
 			updatedDescription = JSON.stringify(updatedDescription);
 		}
+		// Hard-enforce angle rule: different angle categories → no match
+		const anglesDiffer =
+			parsed.new_photo_angle &&
+			parsed.candidate_angle &&
+			parsed.new_photo_angle !== parsed.candidate_angle;
+		const matchedPieceId = anglesDiffer ? null : (parsed.matchedPieceId ?? null);
+		const confidence = anglesDiffer ? 0 : (typeof parsed.confidence === 'number' ? parsed.confidence : 0);
+
 		return {
-			matchedPieceId: parsed.matchedPieceId ?? null,
-			confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0,
+			matchedPieceId,
+			confidence,
 			reasoning: [parsed.distinguishing_feature, parsed.reasoning].filter(Boolean).join(' — '),
 			suggestedName: parsed.suggestedName ?? '',
 			updatedDescription
