@@ -298,7 +298,9 @@ function parseResponseJson(text: string): ClaudeMatchResult {
 	const cleaned = text.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim();
 
 	try {
-		const parsed = JSON.parse(cleaned);
+		const raw = JSON.parse(cleaned);
+		// Gemini sometimes wraps the response in an array
+		const parsed = Array.isArray(raw) ? raw[0] : raw;
 		// updatedDescription may be a JSON object (structured identity card) or a string
 		let updatedDescription = parsed.updatedDescription ?? '';
 		if (typeof updatedDescription === 'object' && updatedDescription !== null) {
