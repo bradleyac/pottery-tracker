@@ -113,8 +113,8 @@ export async function createPieceFromTemp(
 		const depthBuffer = await generateDepthMap(buffer);
 		const depthPath = buildDepthMapPath(userId, pieceId, imageId);
 		await uploadImage(depthBuffer, depthPath, 'image/jpeg');
-	} catch {
-		// Non-fatal
+	} catch (err) {
+		console.error('Depth map generation failed (non-fatal):', err);
 	}
 
 	// Generate embedding for cover image
