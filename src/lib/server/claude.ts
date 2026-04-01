@@ -155,6 +155,17 @@ export async function matchImageToPieces(
 
 	parts.push({ text: '\nReturn only JSON.' });
 
+	console.log('[match] sending to Gemini:', {
+		candidates: candidates.map((p) => ({
+			id: p.id,
+			name: p.name,
+			hasDepthMap: !!p.depthMapBase64,
+			hasThumbnail: !!p.coverImageBase64
+		})),
+		newImageDepthMap: !!depthMapBuffer,
+		totalParts: parts.length
+	});
+
 	const response = await getClient().models.generateContent({
 		model: MATCH_MODEL,
 		config: {
@@ -165,12 +176,16 @@ export async function matchImageToPieces(
 	});
 
 	const text = response.text ?? '';
+	console.log('[match] Gemini raw response:', text.slice(0, 500));
+
 	const result = parseResponseJson(text);
+	console.log('[match] parsed result:', { matchedPieceId: result.matchedPieceId, confidence: result.confidence });
 
 	// Validate matchedPieceId is actually in our list
 	if (result.matchedPieceId) {
 		const exists = candidates.some((p) => p.id === result.matchedPieceId);
 		if (!exists) {
+			console.error('[match] matchedPieceId not in candidate list — nulling');
 			result.matchedPieceId = null;
 			result.confidence = 0;
 		}

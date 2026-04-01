@@ -39,10 +39,11 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 	// Get all pieces (for UI dropdown) and cover paths (for signed URLs)
 	const { existingPieces, coverPathMap } = await getExistingPiecesForMatching(user.id);
 
+	const diag: Record<string, unknown> = {};
 	let matchResult;
 
 	if (existingPieces.length === 0) {
-		// No pieces to match — just describe
+		diag.step = 'no_pieces';
 		const description = await describeNewPiece(buffer, mediaType);
 		matchResult = {
 			matchedPieceId: null,
@@ -53,17 +54,29 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 		};
 	} else {
 		// Generate embedding, description, and depth map in parallel
-		const [embedding, description, depthMap] = await Promise.all([
+		const depthMapResult = await generateDepthMap(buffer).catch((err) => {
+			console.error('[upload] depth map generation failed:', err);
+			return null;
+		});
+		diag.depthMapGenerated = depthMapResult !== null;
+
+		const [embedding, description] = await Promise.all([
 			generateImageEmbedding(buffer),
-			describeNewPiece(buffer, mediaType),
-			generateDepthMap(buffer).catch(() => null)
+			describeNewPiece(buffer, mediaType)
 		]);
 
 		// Find nearest candidates by embedding similarity, download their depth maps
 		const candidates = await getCandidatesByEmbedding(user.id, embedding);
 
+		diag.candidatesFound = candidates.length;
+		diag.candidatesWithDepthMap = candidates.filter((c) => c.depthMapBase64).length;
+		diag.candidatesWithThumbnail = candidates.filter((c) => c.coverImageBase64).length;
+		diag.candidateNames = candidates.map((c) => c.name);
+
+		console.log('[upload] diagnostics:', JSON.stringify(diag));
+
 		if (candidates.length === 0) {
-			// No candidates with embeddings — treat as new piece
+			diag.step = 'no_candidates';
 			matchResult = {
 				matchedPieceId: null,
 				confidence: 0,
@@ -72,9 +85,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 				updatedDescription: description
 			};
 		} else {
-			// Depth map + photo comparison against candidate depth maps
-			matchResult = await matchImageToPieces(buffer, mediaType, candidates, depthMap);
-			// Use the describe result if matching didn't produce a description
+			diag.step = 'gemini_comparison';
+			matchResult = await matchImageToPieces(buffer, mediaType, candidates, depthMapResult);
 			if (!matchResult.updatedDescription) {
 				matchResult.updatedDescription = description;
 			}
@@ -101,6 +113,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 		reasoning: matchResult.reasoning,
 		suggestedName: matchResult.suggestedName,
 		updatedDescription: matchResult.updatedDescription,
+		diagnostics: diag,
 		pieces: existingPieces.map((p) => ({
 			id: p.id,
 			name: p.name,
