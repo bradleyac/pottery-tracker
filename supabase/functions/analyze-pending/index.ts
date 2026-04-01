@@ -78,7 +78,6 @@ interface PendingUploadRecord {
 	user_id: string;
 	temp_storage_path: string;
 }
-
 interface WebhookPayload {
 	type: string;
 	record: PendingUploadRecord;
@@ -360,9 +359,9 @@ Deno.serve(async (req: Request) => {
 			const parts: Array<
 				{ text: string } | { inlineData: { mimeType: string; data: string } }
 			> = [
-				{ text: 'Here is the NEW pottery photo:' },
-				{ inlineData: { mimeType: 'image/jpeg', data: imageBase64 } }
-			];
+					{ text: 'Here is the NEW pottery photo:' },
+					{ inlineData: { mimeType: 'image/jpeg', data: imageBase64 } }
+				];
 
 			if (newDepthBase64) {
 				parts.push({ text: 'Depth map of the new photo (brighter = closer to camera):' });
