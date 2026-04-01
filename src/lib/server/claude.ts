@@ -20,17 +20,22 @@ YOUR TASK IS TO IDENTIFY THE SAME PHYSICAL OBJECT, NOT THE SAME FORM TYPE.
 
 Potters make many pieces of the same form. Two pieces can look nearly identical and still be different objects. Shared form type is EXPECTED and proves nothing.
 
-To confirm a match, you must find a specific physical quirk visible in BOTH photos that would be absent in a typical piece of that form — for example:
-- An asymmetry or wobble that is off-center in a specific direction
-- A crack, scar, or repair
-- An unusual rim irregularity at a specific location
-- A handle or knob that is noticeably off-axis
-- A foot ring that is distinctly uneven on one side
+STEP 1 — DESCRIBE THE PROFILE SHAPE OF EACH STRUCTURAL ELEMENT in both photos.
+For every structural element visible (rim, center ring, boss, handle, foot ring, wall), describe its specific cross-section profile:
+- Is the rim rolled, flat, tapered, flared outward, or folded inward?
+- Is the center ring/boss domed, flat-topped, flared, or cylindrical with a sharp edge?
+- Are the walls straight, curved inward, curved outward, or stepped?
+
+These profile shapes are persistent across all pottery stages and visible from almost any angle that shows the element. A flared ring and a domed ring are different pieces even if both are "raised center rings."
+
+STEP 2 — COMPARE THE PROFILES. If any structural element has a different profile shape between the two photos, they are different pieces. Return null.
+
+STEP 3 — Only if profiles match, look for a specific distinguishing quirk that confirms it is the exact same object (an asymmetry, crack, off-center element, rim irregularity at a specific location).
 
 The following are NOT distinguishing features and MUST NOT be cited as match evidence:
 - Throwing rings or wheel marks (present on all wheel-thrown pottery)
 - Circular or round shape
-- Flat profile, raised center boss, or any feature that defines the form type
+- The mere presence of a rim, center ring, handle, or any element that defines the form type
 - "Identical proportions" or "consistent dimensions" (you cannot measure from photos)
 - Color, clay body, or surface finish
 
@@ -48,8 +53,9 @@ Respond with this JSON structure:
   "confidence": <0.0–1.0>,
   "new_photo_angle": "<top-down | oblique | side profile | three-quarter>",
   "candidate_angle": "<top-down | oblique | side profile | three-quarter>",
-  "distinguishing_feature": "<the single specific physical quirk visible in BOTH photos that identifies this as the same object — or 'none found'>",
-  "reasoning": "<what you see; if angles differ or no distinguishing feature was found, say so explicitly>",
+  "profile_comparison": "<describe the profile shape of each structural element in both photos, and whether they match>",
+  "distinguishing_feature": "<a specific quirk visible in both photos confirming same object — or 'none found' — or 'profile mismatch' if profiles differ>",
+  "reasoning": "<what you see; cite specific profile shapes or quirks; if profiles differ or no distinguishing feature was found, say so explicitly>",
   "suggestedName": "<name if new piece, empty string if matched>",
   "updatedDescription": "<brief description of the piece's key physical features>"
 }
@@ -239,13 +245,18 @@ function parseResponseJson(text: string): ClaudeMatchResult {
 			parsed.new_photo_angle &&
 			parsed.candidate_angle &&
 			parsed.new_photo_angle !== parsed.candidate_angle;
-		const matchedPieceId = anglesDiffer ? null : (parsed.matchedPieceId ?? null);
-		const confidence = anglesDiffer ? 0 : (typeof parsed.confidence === 'number' ? parsed.confidence : 0);
+		// Hard-enforce profile mismatch rule
+		const profileMismatch =
+			typeof parsed.distinguishing_feature === 'string' &&
+			parsed.distinguishing_feature.toLowerCase().includes('profile mismatch');
+		const noMatch = anglesDiffer || profileMismatch;
+		const matchedPieceId = noMatch ? null : (parsed.matchedPieceId ?? null);
+		const confidence = noMatch ? 0 : (typeof parsed.confidence === 'number' ? parsed.confidence : 0);
 
 		return {
 			matchedPieceId,
 			confidence,
-			reasoning: [parsed.distinguishing_feature, parsed.reasoning].filter(Boolean).join(' — '),
+			reasoning: [parsed.profile_comparison, parsed.distinguishing_feature, parsed.reasoning].filter(Boolean).join(' — '),
 			suggestedName: parsed.suggestedName ?? '',
 			updatedDescription
 		};
