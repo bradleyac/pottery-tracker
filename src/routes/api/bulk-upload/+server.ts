@@ -2,6 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { uploadImage } from '$lib/server/storage';
 import { createServiceRoleClient } from '$lib/server/supabase';
+import { generateDepthMap } from '$lib/server/depth';
 import { randomUUID } from 'crypto';
 import sharp from 'sharp';
 
@@ -34,8 +35,14 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 					.resize({ width: 512, height: 512, fit: 'inside', withoutEnlargement: true })
 					.jpeg({ quality: 82 })
 					.toBuffer();
-				const tempPath = `${user.id}/temp/${randomUUID()}.jpg`;
+				const uuid = randomUUID();
+				const tempPath = `${user.id}/temp/${uuid}.jpg`;
+				const depthPath = `${user.id}/temp/depth_${uuid}.jpg`;
 				await uploadImage(buffer, tempPath, 'image/jpeg');
+				// Generate and store depth map so the edge function doesn't have to call Replicate
+				generateDepthMap(buffer)
+					.then((depthBuffer) => uploadImage(depthBuffer, depthPath, 'image/jpeg'))
+					.catch((err) => console.error(`[bulk-upload] depth map failed for ${uuid}:`, err));
 				return { ok: true as const, filename: file.name, tempPath };
 			} catch {
 				return { ok: false as const, filename: file.name, reason: 'Upload failed' };

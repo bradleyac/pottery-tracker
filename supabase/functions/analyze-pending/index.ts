@@ -251,10 +251,30 @@ Deno.serve(async (req: Request) => {
 		const bytes = await blobData.arrayBuffer();
 		const imageBase64 = btoa(String.fromCharCode(...new Uint8Array(bytes)));
 
-		// Generate embedding and depth map in parallel
-		const [embedding, newDepthBase64] = await Promise.all([
+		// Try to download pre-generated depth map (stored by bulk-upload route)
+		const prebuiltDepthPath = tempPath.replace(/\/([^/]+)\.jpg$/, '/depth_$1.jpg');
+		let newDepthBase64: string | null = null;
+		try {
+			const { data: depthBlob } = await supabase.storage
+				.from('pottery-images')
+				.download(prebuiltDepthPath);
+			if (depthBlob) {
+				const depthBytes = await depthBlob.arrayBuffer();
+				newDepthBase64 = btoa(String.fromCharCode(...new Uint8Array(depthBytes)));
+				console.log('[analyze-pending] using pre-stored depth map');
+			}
+		} catch {
+			// Not available — will fall back to Replicate below
+		}
+
+		// Generate embedding; if no pre-stored depth map, try Replicate as fallback
+		const [embedding] = await Promise.all([
 			generateEmbedding(geminiKey, imageBase64),
-			replicateToken ? generateDepthMap(replicateToken, imageBase64) : Promise.resolve(null)
+			newDepthBase64 === null && replicateToken
+				? generateDepthMap(replicateToken, imageBase64)
+					.then((b) => { newDepthBase64 = b; })
+					.catch((err) => { console.error('[analyze-pending] Replicate depth map failed:', err); })
+				: Promise.resolve()
 		]);
 
 		let result: MatchResult;
