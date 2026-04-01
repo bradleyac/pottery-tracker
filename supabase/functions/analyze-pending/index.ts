@@ -26,20 +26,30 @@ When comparing photos, focus on:
 IGNORE differences in color, surface finish, and texture — these change across stages.
 Two photos showing the same shape in different colors/finishes IS a match.
 
-CRITICAL — AVOID FALSE POSITIVES:
-- Potters routinely make multiple similar pieces in the same session. Visual similarity alone is NOT enough to confirm a match.
-- A match requires identifying specific, distinguishing features present in BOTH photos — an asymmetry, a particular wobble, a distinctive rim shape, a unique proportion. Generic shared form (e.g. "both are flat plates") is not a match.
-- If the photos are taken from very different angles (e.g. side view vs. top-down), key proportions may be obscured — lower your confidence accordingly.
-- When in doubt, return null. A missed match is easily corrected by the user; a false match corrupts their records.
+CRITICAL — DEFAULT TO "NEW PIECE":
+- Assume the new photo is a DIFFERENT piece unless you can prove otherwise.
+- Potters make many similar pieces. Shared form type is NOT evidence of a match — it is expected.
+- These features are NEVER distinguishing on their own and must not be used as match evidence:
+  * Throwing rings (all wheel-thrown pottery has them)
+  * Circular or round shape
+  * Being flat, bowl-shaped, or having a center ring
+  * Same clay color or surface finish
+  * General proportions that fit the form type
+- To confirm a match you must identify at least one SPECIFIC feature visible in both photos that would distinguish this piece from another piece of the same form — e.g. a particular asymmetry, an off-center element, an unusual wobble, a crack or scar, a unique rim irregularity.
+- If the photos are taken from very different angles, key proportions are not comparable — treat this as strong evidence against a match, not as something to explain away.
+- If you cannot name a specific distinguishing feature, return null. A missed match is easily corrected; a false match corrupts the potter's records.
 
 Each candidate also has a text identity card as supplementary context for features that
 may not be visible in the reference photo angle.
+
+For each candidate, first look for DISQUALIFYING differences — proportions that don't match, features present in one photo but absent in the other, structural details that are inconsistent. Only after failing to find a disqualifier should you look for confirming evidence.
 
 Return this exact JSON structure:
 {
   "matchedPieceId": "<uuid string or null if no match>",
   "confidence": <number between 0 and 1>,
-  "reasoning": "<brief explanation citing the specific distinguishing features that confirm or rule out a match>",
+  "differences": "<visible differences between the new photo and the candidate, or 'none apparent' if truly none>",
+  "reasoning": "<the specific distinguishing feature that confirms the match, or why the differences rule it out>",
   "suggestedName": "<suggested name if new piece, empty string if matched>",
   "updatedDescription": "<brief text description of the piece's key physical features>"
 }
@@ -47,7 +57,8 @@ Return this exact JSON structure:
 Rules:
 - Set matchedPieceId to null when confidence < 0.70 (treat as new piece)
 - Confidence 0.70-0.84: possible match, note uncertainty in reasoning
-- Confidence 0.85+: confident match`;
+- Confidence 0.85+: confident match
+- Any visible structural difference that cannot be explained by camera angle alone is sufficient to return null`;
 
 const DESCRIBE_SYSTEM_PROMPT = `You are an expert pottery analyst. Describe this pottery piece's key physical features
 in a brief text summary. This description serves as supplementary context alongside photos for matching.
