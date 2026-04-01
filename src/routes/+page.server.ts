@@ -13,7 +13,7 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession } }) => {
 	// Load pieces
 	const { data: pieces, error: dbError } = await supabase
 		.from('pieces')
-		.select('id, user_id, name, description, ai_description, created_at, updated_at, cover_image_id')
+		.select('id, user_id, name, description, ai_description, created_at, updated_at, cover_image_id, cover_embedding')
 		.eq('user_id', user.id)
 		.order('updated_at', { ascending: false });
 

@@ -1,8 +1,12 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { matchImageToPieces } from '$lib/server/claude';
+import { matchImageToPieces, describeNewPiece, generateImageEmbedding } from '$lib/server/claude';
 import { uploadImage } from '$lib/server/storage';
-import { getExistingPiecesForMatching, getPieceCoverUrls } from '$lib/server/pieces';
+import {
+	getExistingPiecesForMatching,
+	getPieceCoverUrls,
+	getCandidatesByEmbedding
+} from '$lib/server/pieces';
 import { randomUUID } from 'crypto';
 
 export const POST: RequestHandler = async ({ request, locals: { safeGetSession } }) => {
@@ -31,8 +35,49 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 
 	await uploadImage(buffer, tempPath, mediaType);
 
+	// Get all pieces (for UI dropdown) and cover paths (for signed URLs)
 	const { existingPieces, coverPathMap } = await getExistingPiecesForMatching(user.id);
-	const matchResult = await matchImageToPieces(buffer, mediaType, existingPieces);
+
+	let matchResult;
+
+	if (existingPieces.length === 0) {
+		// No pieces to match — just describe
+		const description = await describeNewPiece(buffer, mediaType);
+		matchResult = {
+			matchedPieceId: null,
+			confidence: 0,
+			reasoning: 'No existing pieces to match against.',
+			suggestedName: 'New Piece',
+			updatedDescription: description
+		};
+	} else {
+		// Generate embedding and find candidates, describe in parallel
+		const [embedding, description] = await Promise.all([
+			generateImageEmbedding(buffer),
+			describeNewPiece(buffer, mediaType)
+		]);
+
+		// Find nearest candidates by embedding similarity, download their cover images
+		const candidates = await getCandidatesByEmbedding(user.id, embedding);
+
+		if (candidates.length === 0) {
+			// No candidates with embeddings — treat as new piece
+			matchResult = {
+				matchedPieceId: null,
+				confidence: 0,
+				reasoning: 'No candidate pieces with embeddings to match against.',
+				suggestedName: 'New Piece',
+				updatedDescription: description
+			};
+		} else {
+			// Photo-to-photo comparison with candidate cover images
+			matchResult = await matchImageToPieces(buffer, mediaType, candidates);
+			// Use the describe result if matching didn't produce a description
+			if (!matchResult.updatedDescription) {
+				matchResult.updatedDescription = description;
+			}
+		}
+	}
 
 	const coverUrlMap = await getPieceCoverUrls(existingPieces, coverPathMap);
 

@@ -23,9 +23,9 @@ To run a single test file: `npx vitest run --project storybook src/stories/Image
 
 ## Architecture
 
-This is a pottery-tracking app. Users upload photos; Claude Vision matches them to existing pieces or identifies new ones. The key flow:
+This is a pottery-tracking app. Users upload photos; Gemini Flash matches them to existing pieces or identifies new ones using image-based comparison with embedding pre-filtering. The key flow:
 
-1. **Upload** (`/upload`) → `POST /api/upload` → stores image in `pottery-images` bucket at `{user_id}/temp/{uuid}.jpg`, calls Claude, writes a `pending_uploads` row with `status: 'queued'` → immediately returns match result to the client
+1. **Upload** (`/upload`) → `POST /api/upload` → stores image in `pottery-images` bucket at `{user_id}/temp/{uuid}.jpg`, generates embedding via `gemini-embedding-2-preview`, queries pgvector for 9 nearest candidates, sends candidate cover images + new photo to Gemini Flash for visual comparison → immediately returns match result to the client
 2. **Review** (`/review`) → user sees `PendingUploadCard` for each pending upload, accepts/overrides the suggestion → `POST /api/pending-uploads/{id}` confirms and moves the image to `{user_id}/{piece_id}/{image_id}.jpg`
 3. **Pieces** (`/pieces`, `/pieces/{id}`) → browse and view individual pieces with their full image history via `ImageGallery`
 
@@ -34,8 +34,10 @@ This is a pottery-tracking app. Users upload photos; Claude Vision matches them 
 - **Two Supabase clients**: `createSupabaseServerClient(event)` (cookie-based, user auth) used in `hooks.server.ts`; `createServiceRoleClient()` (service role, bypasses RLS) used everywhere data is actually read/written
 - **All DB queries are in `+page.server.ts` load functions** — no client-side DB access
 - **Signed URLs generated server-side** with service-role key, never on the client. Bucket `pottery-images` has RLS; all access goes through signed URLs
-- **Claude image preprocessing**: images are resized to ≤512px via `sharp` before sending to Claude to control token costs (~100 tokens vs ~4000 for full-res). Originals stored at full resolution.
-- **Gemini Flash**: `gemini-2.5-flash` for both matching and descriptions (vision + reasoning, much cheaper than Claude for vision tasks)
+- **Image preprocessing**: images are resized to ≤512px via `sharp` before sending to Gemini to control token costs. Originals stored at full resolution. 512px thumbnails stored at `{user_id}/{piece_id}/thumb_{image_id}.jpg` for fast candidate retrieval during matching.
+- **Gemini Flash**: `gemini-2.5-flash` for both matching and descriptions (vision + reasoning). Uses `@google/genai` SDK on the server, REST API in the Deno edge function.
+- **Image embeddings**: `gemini-embedding-2-preview` generates 768-dim embeddings for cover images, stored in `pieces.cover_embedding` (pgvector `vector(768)` column). Used for nearest-neighbor pre-filtering before visual comparison.
+- **Matching flow**: upload → embed new image → `match_pieces` RPC (pgvector cosine similarity, top 9) → download candidate thumbnails → multi-image Gemini request (1 new + up to 9 candidate photos) → return match result. Gemini's 10-image-per-request limit caps candidates at 9.
 
 ### UI patterns
 

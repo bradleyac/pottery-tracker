@@ -1,8 +1,8 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { createServiceRoleClient } from '$lib/server/supabase';
-import { matchImageToPieces } from '$lib/server/claude';
-import type { ExistingPiece } from '$lib/server/claude';
+import { matchImageToPieces, describeNewPiece, generateImageEmbedding } from '$lib/server/claude';
+import { getCandidatesByEmbedding } from '$lib/server/pieces';
 
 export const POST: RequestHandler = async ({ params, locals: { safeGetSession } }) => {
 	const { session, user } = await safeGetSession();
@@ -34,21 +34,31 @@ export const POST: RequestHandler = async ({ params, locals: { safeGetSession } 
 
 	const buffer = Buffer.from(await blob.arrayBuffer());
 
-	// Fetch user's pieces
-	const { data: pieces } = await supabase
-		.from('pieces')
-		.select('id, name, ai_description')
-		.eq('user_id', user.id)
-		.order('created_at', { ascending: false });
-
-	const existingPieces: ExistingPiece[] = (pieces ?? []).map((p) => ({
-		id: p.id,
-		name: p.name,
-		ai_description: p.ai_description
-	}));
-
 	try {
-		const result = await matchImageToPieces(buffer, 'image/jpeg', existingPieces);
+		// Generate embedding and description in parallel
+		const [embedding, description] = await Promise.all([
+			generateImageEmbedding(buffer),
+			describeNewPiece(buffer, 'image/jpeg')
+		]);
+
+		// Find nearest candidates by embedding similarity
+		const candidates = await getCandidatesByEmbedding(user.id, embedding);
+
+		let result;
+		if (candidates.length === 0) {
+			result = {
+				matchedPieceId: null,
+				confidence: 0,
+				reasoning: 'No candidate pieces with embeddings to match against.',
+				suggestedName: 'New Piece',
+				updatedDescription: description
+			};
+		} else {
+			result = await matchImageToPieces(buffer, 'image/jpeg', candidates);
+			if (!result.updatedDescription) {
+				result.updatedDescription = description;
+			}
+		}
 
 		await supabase
 			.from('pending_uploads')

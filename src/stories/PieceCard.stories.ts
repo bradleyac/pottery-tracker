@@ -13,6 +13,7 @@ const basePiece: PieceWithCover = {
 	created_at: '2025-10-01T10:00:00Z',
 	updated_at: new Date().toISOString(),
 	cover_image_id: 'img-1',
+	cover_embedding: null,
 	cover_url: 'https://picsum.photos/seed/bowl/400/400'
 };
 

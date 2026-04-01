@@ -1,6 +1,13 @@
 import { createServiceRoleClient } from './supabase';
-import { uploadImage, deleteImage, buildStoragePath, getSignedUrls } from './storage';
-import { describeNewPiece } from './claude';
+import {
+	uploadImage,
+	deleteImage,
+	buildStoragePath,
+	buildThumbnailPath,
+	getSignedUrls,
+	downloadImage
+} from './storage';
+import { describeNewPiece, resizeForApi, generateImageEmbedding } from './claude';
 import type { ExistingPiece } from './claude';
 import { randomUUID } from 'crypto';
 
@@ -90,6 +97,23 @@ export async function createPieceFromTemp(
 		}
 	}
 
+	// Store 512px thumbnail for matching
+	try {
+		const { data: thumbData, mimeType: thumbMime } = await resizeForApi(buffer);
+		const thumbPath = buildThumbnailPath(userId, pieceId, imageId);
+		await uploadImage(Buffer.from(thumbData, 'base64'), thumbPath, thumbMime);
+	} catch {
+		// Non-fatal — matching will work without thumbnail
+	}
+
+	// Generate embedding for cover image
+	let embedding: number[] | null = null;
+	try {
+		embedding = await generateImageEmbedding(buffer);
+	} catch {
+		// Non-fatal — piece won't appear as a candidate until embedding is generated
+	}
+
 	const { error: imageError } = await supabase.from('images').insert({
 		id: imageId,
 		piece_id: pieceId,
@@ -101,10 +125,15 @@ export async function createPieceFromTemp(
 
 	if (imageError) throw new Error(`Failed to save image: ${imageError.message}`);
 
-	await supabase
-		.from('pieces')
-		.update({ cover_image_id: imageId, ai_description: aiDescription })
-		.eq('id', pieceId);
+	const pieceUpdate: Record<string, unknown> = {
+		cover_image_id: imageId,
+		ai_description: aiDescription
+	};
+	if (embedding) {
+		pieceUpdate.cover_embedding = JSON.stringify(embedding);
+	}
+
+	await supabase.from('pieces').update(pieceUpdate).eq('id', pieceId);
 
 	return { pieceId };
 }
@@ -158,7 +187,25 @@ export async function addImageToExistingPiece(
 	if (insertError) throw new Error(`Failed to save image: ${insertError.message}`);
 
 	const updates: Record<string, unknown> = {};
-	if (isFirstImage) updates.cover_image_id = imageId;
+	if (isFirstImage) {
+		updates.cover_image_id = imageId;
+
+		// Store thumbnail and embedding for the new cover image
+		try {
+			const { data: thumbData, mimeType: thumbMime } = await resizeForApi(buffer);
+			const thumbPath = buildThumbnailPath(userId, pieceId, imageId);
+			await uploadImage(Buffer.from(thumbData, 'base64'), thumbPath, thumbMime);
+		} catch {
+			// Non-fatal
+		}
+
+		try {
+			const embedding = await generateImageEmbedding(buffer);
+			updates.cover_embedding = JSON.stringify(embedding);
+		} catch {
+			// Non-fatal
+		}
+	}
 
 	const needsDescription = !piece.ai_description;
 	if (needsDescription) {
@@ -210,7 +257,24 @@ export async function addImageBufferToPiece(
 	if (insertError) throw new Error(`Failed to save image: ${insertError.message}`);
 
 	const updates: Record<string, unknown> = {};
-	if (isFirstImage) updates.cover_image_id = imageId;
+	if (isFirstImage) {
+		updates.cover_image_id = imageId;
+
+		try {
+			const { data: thumbData, mimeType: thumbMime } = await resizeForApi(buffer);
+			const thumbPath = buildThumbnailPath(userId, pieceId, imageId);
+			await uploadImage(Buffer.from(thumbData, 'base64'), thumbPath, thumbMime);
+		} catch {
+			// Non-fatal
+		}
+
+		try {
+			const embedding = await generateImageEmbedding(buffer);
+			updates.cover_embedding = JSON.stringify(embedding);
+		} catch {
+			// Non-fatal
+		}
+	}
 
 	if (!piece.ai_description) {
 		const newDescription = await describeNewPiece(buffer).catch(() => null);
@@ -222,6 +286,82 @@ export async function addImageBufferToPiece(
 	}
 
 	return { imageId, pieceId };
+}
+
+export async function getCandidatesByEmbedding(
+	userId: string,
+	embedding: number[],
+	limit = 9
+): Promise<ExistingPiece[]> {
+	const supabase = createServiceRoleClient();
+
+	const { data: matches, error } = await supabase.rpc('match_pieces', {
+		query_embedding: JSON.stringify(embedding),
+		match_user_id: userId,
+		match_count: limit
+	});
+
+	if (error) throw new Error(`Embedding search failed: ${error.message}`);
+
+	const matchRows = matches as
+		| { id: string; name: string; ai_description: string | null; cover_image_id: string | null }[]
+		| null;
+	if (!matchRows || matchRows.length === 0) return [];
+
+	// Get cover image paths for thumbnail download
+	const coverImageIds = matchRows
+		.map((m) => m.cover_image_id)
+		.filter(Boolean) as string[];
+
+	const coverPathMap = new Map<string, string>();
+	if (coverImageIds.length > 0) {
+		const { data: coverImages } = await supabase
+			.from('images')
+			.select('id, storage_path, piece_id, user_id')
+			.in('id', coverImageIds);
+
+		if (coverImages) {
+			for (const img of coverImages) {
+				coverPathMap.set(img.id, img.storage_path);
+			}
+		}
+	}
+
+	// Download thumbnails in parallel
+	const candidates = await Promise.all(
+		matchRows.map(async (m) => {
+				const coverPath = m.cover_image_id ? coverPathMap.get(m.cover_image_id) : null;
+				let coverImageBase64: string | null = null;
+
+				if (coverPath) {
+					try {
+						// Try thumbnail first, fall back to full image + resize
+						const thumbPath = coverPath.replace(/\/([^/]+)\.jpg$/, '/thumb_$1.jpg');
+						const thumbBuffer = await downloadImage(thumbPath);
+						coverImageBase64 = thumbBuffer.toString('base64');
+					} catch {
+						try {
+							const fullBuffer = await downloadImage(coverPath);
+							const { data } = await resizeForApi(fullBuffer);
+							coverImageBase64 = data;
+						} catch {
+							// Skip this candidate's image
+						}
+					}
+				}
+
+				return {
+					id: m.id,
+					name: m.name,
+					ai_description: m.ai_description,
+					cover_storage_path: coverPath ?? null,
+					coverImageBase64
+				} satisfies ExistingPiece;
+			}
+		)
+	);
+
+	return candidates;
 }
 
 export async function getPieceCoverUrls(

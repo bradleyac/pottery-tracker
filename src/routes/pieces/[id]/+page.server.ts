@@ -12,7 +12,7 @@ export const load: PageServerLoad = async ({ params, locals: { safeGetSession } 
 
 	const { data: piece, error: pieceError } = await supabase
 		.from('pieces')
-		.select('id, name, description, ai_description, created_at, updated_at, cover_image_id')
+		.select('id, name, description, ai_description, created_at, updated_at, cover_image_id, cover_embedding')
 		.eq('id', params.id)
 		.eq('user_id', user.id)
 		.single();
@@ -51,6 +51,7 @@ export const load: PageServerLoad = async ({ params, locals: { safeGetSession } 
 		created_at: piece.created_at,
 		updated_at: piece.updated_at,
 		cover_image_id: piece.cover_image_id ?? null,
+		cover_embedding: piece.cover_embedding ?? null,
 		images: imagesWithUrls
 	};
 

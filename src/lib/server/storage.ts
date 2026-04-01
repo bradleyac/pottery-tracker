@@ -66,3 +66,17 @@ export async function deleteImage(storagePath: string): Promise<void> {
 export function buildStoragePath(userId: string, pieceId: string, imageId: string): string {
 	return `${userId}/${pieceId}/${imageId}.jpg`;
 }
+
+export function buildThumbnailPath(userId: string, pieceId: string, imageId: string): string {
+	return `${userId}/${pieceId}/thumb_${imageId}.jpg`;
+}
+
+export async function downloadImage(storagePath: string): Promise<Buffer> {
+	const supabase = createServiceRoleClient();
+
+	const { data, error } = await supabase.storage.from(BUCKET).download(storagePath);
+
+	if (error || !data) throw new Error(`Failed to download image: ${error?.message}`);
+
+	return Buffer.from(await data.arrayBuffer());
+}
