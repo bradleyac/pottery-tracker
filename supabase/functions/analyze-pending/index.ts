@@ -42,7 +42,7 @@ Respond with this JSON structure:
   "matchedPieceId": "<uuid or null>",
   "confidence": <0.0–1.0>,
   "depth_comparison": "<describe what the depth maps reveal about the profile shapes of each structural element, and whether they match>",
-  "distinguishing_feature": "<a specific quirk visible in both depth maps or photos confirming same object — or 'none found' — or 'profile mismatch' if depth profiles differ>",
+  "distinguishing_feature": "<a specific quirk visible in both photos confirming same object, OR 'consistent overall' if profiles and decoration match with no contradicting evidence, OR 'profile mismatch' if depth profiles differ>",
   "reasoning": "<cite specific depth map observations; if profiles differ or no distinguishing feature was found, say so explicitly>",
   "suggestedName": "<name if new piece, empty string if matched>",
   "updatedDescription": "<brief description of the piece's key physical features>"
@@ -53,7 +53,7 @@ Rules:
 - If distinguishing_feature is 'none found', matchedPieceId MUST be null
 - Set matchedPieceId to null when confidence < 0.70
 - Confidence 0.70–0.84: possible match with noted uncertainty
-- Confidence 0.85+: confident match with a clearly visible distinguishing feature`;
+- Confidence 0.85+: strong match — depth profiles consistent AND overall form/decoration consistent with no contradicting evidence`;
 
 const DESCRIBE_SYSTEM_PROMPT = `You are an expert pottery analyst. Describe this pottery piece's key physical features
 in a brief text summary. This description serves as supplementary context alongside photos for matching.
