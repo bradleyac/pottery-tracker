@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { createServiceRoleClient } from '$lib/server/supabase';
-import { deleteImage } from '$lib/server/storage';
+import { deleteImage, buildThumbnailPath, buildDepthMapPath } from '$lib/server/storage';
 
 export const DELETE: RequestHandler = async ({ params, locals: { safeGetSession } }) => {
 	const { session, user } = await safeGetSession();
@@ -26,12 +26,19 @@ export const DELETE: RequestHandler = async ({ params, locals: { safeGetSession 
 		.select('id, storage_path')
 		.eq('piece_id', pieceId);
 
-	// Delete storage files
+	// Delete storage files (main image + derived thumbnail and depth map)
 	for (const img of images ?? []) {
-		try {
-			await deleteImage(img.storage_path);
-		} catch {
-			// Non-fatal — continue deleting others
+		const paths = [
+			img.storage_path,
+			buildThumbnailPath(user.id, pieceId, img.id),
+			buildDepthMapPath(user.id, pieceId, img.id)
+		];
+		for (const path of paths) {
+			try {
+				await deleteImage(path);
+			} catch {
+				// Non-fatal — file may not exist (e.g. no depth map generated)
+			}
 		}
 	}
 
