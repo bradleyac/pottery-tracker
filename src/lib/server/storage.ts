@@ -71,6 +71,10 @@ export function buildThumbnailPath(userId: string, pieceId: string, imageId: str
 	return `${userId}/${pieceId}/thumb_${imageId}.jpg`;
 }
 
+export function buildDepthMapPath(userId: string, pieceId: string, imageId: string): string {
+	return `${userId}/${pieceId}/depth_${imageId}.jpg`;
+}
+
 export async function downloadImage(storagePath: string): Promise<Buffer> {
 	const supabase = createServiceRoleClient();
 

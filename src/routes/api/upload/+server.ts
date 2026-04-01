@@ -1,6 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { matchImageToPieces, describeNewPiece, generateImageEmbedding } from '$lib/server/claude';
+import { generateDepthMap } from '$lib/server/depth';
 import { uploadImage } from '$lib/server/storage';
 import {
 	getExistingPiecesForMatching,
@@ -51,13 +52,14 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 			updatedDescription: description
 		};
 	} else {
-		// Generate embedding and find candidates, describe in parallel
-		const [embedding, description] = await Promise.all([
+		// Generate embedding, description, and depth map in parallel
+		const [embedding, description, depthMap] = await Promise.all([
 			generateImageEmbedding(buffer),
-			describeNewPiece(buffer, mediaType)
+			describeNewPiece(buffer, mediaType),
+			generateDepthMap(buffer).catch(() => null)
 		]);
 
-		// Find nearest candidates by embedding similarity, download their cover images
+		// Find nearest candidates by embedding similarity, download their depth maps
 		const candidates = await getCandidatesByEmbedding(user.id, embedding);
 
 		if (candidates.length === 0) {
@@ -70,8 +72,8 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 				updatedDescription: description
 			};
 		} else {
-			// Photo-to-photo comparison with candidate cover images
-			matchResult = await matchImageToPieces(buffer, mediaType, candidates);
+			// Depth map + photo comparison against candidate depth maps
+			matchResult = await matchImageToPieces(buffer, mediaType, candidates, depthMap);
 			// Use the describe result if matching didn't produce a description
 			if (!matchResult.updatedDescription) {
 				matchResult.updatedDescription = description;

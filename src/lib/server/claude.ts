@@ -20,29 +20,25 @@ YOUR TASK IS TO IDENTIFY THE SAME PHYSICAL OBJECT, NOT THE SAME FORM TYPE.
 
 Potters make many pieces of the same form. Two pieces can look nearly identical and still be different objects. Shared form type is EXPECTED and proves nothing.
 
-STEP 1 — DESCRIBE THE PROFILE SHAPE OF EACH STRUCTURAL ELEMENT in both photos.
-For every structural element visible (rim, center ring, boss, handle, foot ring, wall), describe its specific cross-section profile:
-- Is the rim rolled, flat, tapered, flared outward, or folded inward?
-- Is the center ring/boss domed, flat-topped, flared, or cylindrical with a sharp edge?
-- Are the walls straight, curved inward, curved outward, or stepped?
+You will be given the new photo and, alongside each candidate, a DEPTH MAP. Depth maps encode 3D surface geometry: brighter pixels are closer to the camera, darker pixels are further away. The gradient patterns directly reveal surface profile shapes — slopes, curves, ridges, and the cross-section of structural elements like rims and rings.
 
-These profile shapes are persistent across all pottery stages and visible from almost any angle that shows the element. A flared ring and a domed ring are different pieces even if both are "raised center rings."
+STEP 1 — COMPARE DEPTH MAPS. For each candidate, compare the depth map of the new photo against the candidate's depth map:
+- What is the profile shape of the outer rim? (flat, upturned, drooping — look at the gradient at the edge)
+- What is the profile of the center ring or boss? (flat-topped, domed, flared outward, cylindrical — look at the highlight shape on top of the ring)
+- How does the main surface transition? (flat, gently concave, steeply concave — look at the gradient between rim and center)
+- Are there any steps, ridges, or abrupt transitions?
 
-STEP 2 — COMPARE THE PROFILES. If any structural element has a different profile shape between the two photos, they are different pieces. Return null.
+A flat-topped ring shows a uniform bright plateau. A domed ring shows a rounded bright highlight fading to the sides. A flared ring shows a bright edge that curves outward. These are visually distinct in a depth map.
 
-STEP 3 — Only if profiles match, look for a specific distinguishing quirk that confirms it is the exact same object (an asymmetry, crack, off-center element, rim irregularity at a specific location).
+STEP 2 — If any structural element has a clearly different depth profile between the new photo and a candidate, they are DIFFERENT PIECES. Return null for that candidate.
+
+STEP 3 — Only if depth profiles match, look for a specific distinguishing quirk that confirms it is the exact same object (an asymmetry, off-center element, irregularity at a specific location visible in the depth map or RGB photo).
 
 The following are NOT distinguishing features and MUST NOT be cited as match evidence:
-- Throwing rings or wheel marks (present on all wheel-thrown pottery)
+- Throwing rings or wheel marks
 - Circular or round shape
-- The mere presence of a rim, center ring, handle, or any element that defines the form type
-- "Identical proportions" or "consistent dimensions" (you cannot measure from photos)
+- The mere presence of a rim, center ring, or any element that defines the form type
 - Color, clay body, or surface finish
-
-ANGLE ASSESSMENT — do this first:
-Compare the camera angle of the new photo to the candidate's reference photo. Classify each as one of: top-down, oblique (angled from above), side profile, or three-quarter.
-
-If the two photos are from different angle categories, you CANNOT reliably confirm that a feature seen in one photo is the same feature seen in the other. A dip on a rim looks completely different from above vs. from the side. In this case, confidence MUST be below 0.70 — do not claim a match.
 
 ---
 
@@ -51,21 +47,19 @@ Respond with this JSON structure:
 {
   "matchedPieceId": "<uuid or null>",
   "confidence": <0.0–1.0>,
-  "new_photo_angle": "<top-down | oblique | side profile | three-quarter>",
-  "candidate_angle": "<top-down | oblique | side profile | three-quarter>",
-  "profile_comparison": "<describe the profile shape of each structural element in both photos, and whether they match>",
-  "distinguishing_feature": "<a specific quirk visible in both photos confirming same object — or 'none found' — or 'profile mismatch' if profiles differ>",
-  "reasoning": "<what you see; cite specific profile shapes or quirks; if profiles differ or no distinguishing feature was found, say so explicitly>",
+  "depth_comparison": "<describe what the depth maps reveal about the profile shapes of each structural element, and whether they match>",
+  "distinguishing_feature": "<a specific quirk visible in both depth maps or photos confirming same object — or 'none found' — or 'profile mismatch' if depth profiles differ>",
+  "reasoning": "<cite specific depth map observations; if profiles differ or no distinguishing feature was found, say so explicitly>",
   "suggestedName": "<name if new piece, empty string if matched>",
   "updatedDescription": "<brief description of the piece's key physical features>"
 }
 
 Rules:
-- If new_photo_angle and candidate_angle differ, confidence MUST be < 0.70 (return null)
+- If distinguishing_feature is 'profile mismatch', matchedPieceId MUST be null
 - If distinguishing_feature is 'none found', matchedPieceId MUST be null
 - Set matchedPieceId to null when confidence < 0.70
 - Confidence 0.70–0.84: possible match with noted uncertainty
-- Confidence 0.85+: confident match with a clearly visible distinguishing feature in both photos`;
+- Confidence 0.85+: confident match with a clearly visible distinguishing feature`;
 
 export type ExistingPiece = {
 	id: string;
@@ -73,6 +67,7 @@ export type ExistingPiece = {
 	ai_description: string | null;
 	cover_storage_path?: string | null;
 	coverImageBase64?: string | null;
+	depthMapBase64?: string | null;
 };
 
 type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
@@ -106,7 +101,8 @@ export async function generateImageEmbedding(imageBuffer: Buffer): Promise<numbe
 export async function matchImageToPieces(
 	imageBuffer: Buffer,
 	mediaType: ImageMediaType,
-	candidates: ExistingPiece[]
+	candidates: ExistingPiece[],
+	depthMapBuffer?: Buffer | null
 ): Promise<ClaudeMatchResult> {
 	// No candidates → skip matching, just describe
 	if (candidates.length === 0) {
@@ -122,19 +118,27 @@ export async function matchImageToPieces(
 
 	const { data: base64Image, mimeType } = await resizeForApi(imageBuffer);
 
-	// Build multi-image parts: new photo + candidate photos with identity cards
 	const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
-		{ text: 'Here is the NEW pottery photo to identify:' },
-		{ inlineData: { mimeType, data: base64Image } },
-		{ text: '\nHere are the candidate pieces from this potter\'s collection. Compare the new photo visually against each candidate\'s reference photo:\n' }
+		{ text: 'Here is the NEW pottery photo:' },
+		{ inlineData: { mimeType, data: base64Image } }
 	];
+
+	if (depthMapBuffer) {
+		parts.push({ text: 'Depth map of the new photo (brighter = closer to camera):' });
+		parts.push({ inlineData: { mimeType: 'image/jpeg', data: depthMapBuffer.toString('base64') } });
+	}
+
+	parts.push({ text: '\nCompare the new photo against each candidate using depth maps to assess 3D profile shapes:\n' });
 
 	for (let i = 0; i < candidates.length; i++) {
 		const p = candidates[i];
 		parts.push({ text: `\n--- Candidate ${i + 1} ---\nID: ${p.id}\nName: ${p.name}` });
 
-		if (p.coverImageBase64) {
-			parts.push({ text: 'Reference photo:' });
+		if (p.depthMapBase64) {
+			parts.push({ text: 'Depth map (brighter = closer to camera):' });
+			parts.push({ inlineData: { mimeType: 'image/jpeg', data: p.depthMapBase64 } });
+		} else if (p.coverImageBase64) {
+			parts.push({ text: 'Reference photo (no depth map available):' });
 			parts.push({ inlineData: { mimeType: 'image/jpeg', data: p.coverImageBase64 } });
 		}
 
@@ -150,7 +154,7 @@ export async function matchImageToPieces(
 		}
 	}
 
-	parts.push({ text: '\nDoes the new photo match any candidate? Compare shapes, proportions, and structural features visually. Ignore color/finish differences. Return only JSON.' });
+	parts.push({ text: '\nReturn only JSON.' });
 
 	const response = await getClient().models.generateContent({
 		model: MATCH_MODEL,
@@ -240,23 +244,17 @@ function parseResponseJson(text: string): ClaudeMatchResult {
 		if (typeof updatedDescription === 'object' && updatedDescription !== null) {
 			updatedDescription = JSON.stringify(updatedDescription);
 		}
-		// Hard-enforce angle rule: different angle categories → no match
-		const anglesDiffer =
-			parsed.new_photo_angle &&
-			parsed.candidate_angle &&
-			parsed.new_photo_angle !== parsed.candidate_angle;
 		// Hard-enforce profile mismatch rule
 		const profileMismatch =
 			typeof parsed.distinguishing_feature === 'string' &&
 			parsed.distinguishing_feature.toLowerCase().includes('profile mismatch');
-		const noMatch = anglesDiffer || profileMismatch;
-		const matchedPieceId = noMatch ? null : (parsed.matchedPieceId ?? null);
-		const confidence = noMatch ? 0 : (typeof parsed.confidence === 'number' ? parsed.confidence : 0);
+		const matchedPieceId = profileMismatch ? null : (parsed.matchedPieceId ?? null);
+		const confidence = profileMismatch ? 0 : (typeof parsed.confidence === 'number' ? parsed.confidence : 0);
 
 		return {
 			matchedPieceId,
 			confidence,
-			reasoning: [parsed.profile_comparison, parsed.distinguishing_feature, parsed.reasoning].filter(Boolean).join(' — '),
+			reasoning: [parsed.depth_comparison, parsed.distinguishing_feature, parsed.reasoning].filter(Boolean).join(' — '),
 			suggestedName: parsed.suggestedName ?? '',
 			updatedDescription
 		};

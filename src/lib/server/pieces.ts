@@ -4,10 +4,12 @@ import {
 	deleteImage,
 	buildStoragePath,
 	buildThumbnailPath,
+	buildDepthMapPath,
 	getSignedUrls,
 	downloadImage
 } from './storage';
 import { describeNewPiece, resizeForApi, generateImageEmbedding } from './claude';
+import { generateDepthMap } from './depth';
 import type { ExistingPiece } from './claude';
 import { randomUUID } from 'crypto';
 
@@ -106,6 +108,15 @@ export async function createPieceFromTemp(
 		// Non-fatal — matching will work without thumbnail
 	}
 
+	// Store depth map for 3D profile matching
+	try {
+		const depthBuffer = await generateDepthMap(buffer);
+		const depthPath = buildDepthMapPath(userId, pieceId, imageId);
+		await uploadImage(depthBuffer, depthPath, 'image/jpeg');
+	} catch {
+		// Non-fatal
+	}
+
 	// Generate embedding for cover image
 	let embedding: number[] | null = null;
 	try {
@@ -200,6 +211,14 @@ export async function addImageToExistingPiece(
 		}
 
 		try {
+			const depthBuffer = await generateDepthMap(buffer);
+			const depthPath = buildDepthMapPath(userId, pieceId, imageId);
+			await uploadImage(depthBuffer, depthPath, 'image/jpeg');
+		} catch {
+			// Non-fatal
+		}
+
+		try {
 			const embedding = await generateImageEmbedding(buffer);
 			updates.cover_embedding = JSON.stringify(embedding);
 		} catch {
@@ -269,6 +288,14 @@ export async function addImageBufferToPiece(
 		}
 
 		try {
+			const depthBuffer = await generateDepthMap(buffer);
+			const depthPath = buildDepthMapPath(userId, pieceId, imageId);
+			await uploadImage(depthBuffer, depthPath, 'image/jpeg');
+		} catch {
+			// Non-fatal
+		}
+
+		try {
 			const embedding = await generateImageEmbedding(buffer);
 			updates.cover_embedding = JSON.stringify(embedding);
 		} catch {
@@ -291,7 +318,7 @@ export async function addImageBufferToPiece(
 export async function getCandidatesByEmbedding(
 	userId: string,
 	embedding: number[],
-	limit = 9
+	limit = 8
 ): Promise<ExistingPiece[]> {
 	const supabase = createServiceRoleClient();
 
@@ -327,15 +354,26 @@ export async function getCandidatesByEmbedding(
 		}
 	}
 
-	// Download thumbnails in parallel
+	// Download depth maps (primary) and thumbnails (fallback) in parallel
 	const candidates = await Promise.all(
 		matchRows.map(async (m) => {
-				const coverPath = m.cover_image_id ? coverPathMap.get(m.cover_image_id) : null;
-				let coverImageBase64: string | null = null;
+			const coverPath = m.cover_image_id ? coverPathMap.get(m.cover_image_id) : null;
+			let depthMapBase64: string | null = null;
+			let coverImageBase64: string | null = null;
 
-				if (coverPath) {
+			if (coverPath) {
+				// Try depth map first
+				try {
+					const depthPath = coverPath.replace(/\/([^/]+)\.jpg$/, '/depth_$1.jpg');
+					const depthBuffer = await downloadImage(depthPath);
+					depthMapBase64 = depthBuffer.toString('base64');
+				} catch {
+					// No depth map — fall back to thumbnail for this candidate
+				}
+
+				// Always try to get thumbnail as fallback
+				if (!depthMapBase64) {
 					try {
-						// Try thumbnail first, fall back to full image + resize
 						const thumbPath = coverPath.replace(/\/([^/]+)\.jpg$/, '/thumb_$1.jpg');
 						const thumbBuffer = await downloadImage(thumbPath);
 						coverImageBase64 = thumbBuffer.toString('base64');
@@ -349,16 +387,17 @@ export async function getCandidatesByEmbedding(
 						}
 					}
 				}
-
-				return {
-					id: m.id,
-					name: m.name,
-					ai_description: m.ai_description,
-					cover_storage_path: coverPath ?? null,
-					coverImageBase64
-				} satisfies ExistingPiece;
 			}
-		)
+
+			return {
+				id: m.id,
+				name: m.name,
+				ai_description: m.ai_description,
+				cover_storage_path: coverPath ?? null,
+				coverImageBase64,
+				depthMapBase64
+			} satisfies ExistingPiece;
+		})
 	);
 
 	return candidates;

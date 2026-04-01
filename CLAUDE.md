@@ -85,4 +85,5 @@ PUBLIC_SUPABASE_URL
 PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
 GEMINI_API_KEY
+HUGGINGFACE_TOKEN     # Free HuggingFace account — used for depth map generation (Depth Anything V2)
 ```

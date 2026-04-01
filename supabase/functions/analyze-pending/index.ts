@@ -154,6 +154,25 @@ async function generateEmbedding(apiKey: string, imageBase64: string): Promise<n
 	return data.embedding?.values ?? [];
 }
 
+async function generateDepthMap(hfToken: string, imageBase64: string): Promise<string | null> {
+	const resp = await fetch(
+		'https://api-inference.huggingface.co/models/depth-anything/Depth-Anything-V2-Small-hf',
+		{
+			method: 'POST',
+			headers: {
+				Authorization: `Bearer ${hfToken}`,
+				'Content-Type': 'application/json',
+				'x-wait-for-model': 'true'
+			},
+			body: JSON.stringify({ inputs: imageBase64 }),
+			signal: AbortSignal.timeout(120_000)
+		}
+	);
+	if (!resp.ok) return null;
+	const bytes = await resp.arrayBuffer();
+	return btoa(String.fromCharCode(...new Uint8Array(bytes)));
+}
+
 function parseResponseJson(text: string): MatchResult {
 	const cleaned = text.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim();
 	try {
@@ -162,23 +181,17 @@ function parseResponseJson(text: string): MatchResult {
 		if (typeof updatedDescription === 'object' && updatedDescription !== null) {
 			updatedDescription = JSON.stringify(updatedDescription);
 		}
-		// Hard-enforce angle rule: different angle categories → no match
-		const anglesDiffer =
-			parsed.new_photo_angle &&
-			parsed.candidate_angle &&
-			parsed.new_photo_angle !== parsed.candidate_angle;
 		// Hard-enforce profile mismatch rule
 		const profileMismatch =
 			typeof parsed.distinguishing_feature === 'string' &&
 			parsed.distinguishing_feature.toLowerCase().includes('profile mismatch');
-		const noMatch = anglesDiffer || profileMismatch;
-		const matchedPieceId = noMatch ? null : (parsed.matchedPieceId ?? null);
-		const confidence = noMatch ? 0 : (typeof parsed.confidence === 'number' ? parsed.confidence : 0);
+		const matchedPieceId = profileMismatch ? null : (parsed.matchedPieceId ?? null);
+		const confidence = profileMismatch ? 0 : (typeof parsed.confidence === 'number' ? parsed.confidence : 0);
 
 		return {
 			matchedPieceId,
 			confidence,
-			reasoning: [parsed.profile_comparison, parsed.distinguishing_feature, parsed.reasoning].filter(Boolean).join(' — '),
+			reasoning: [parsed.depth_comparison, parsed.distinguishing_feature, parsed.reasoning].filter(Boolean).join(' — '),
 			suggestedName: parsed.suggestedName ?? '',
 			updatedDescription
 		};
@@ -201,6 +214,7 @@ Deno.serve(async (req: Request) => {
 	const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 	const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 	const geminiKey = Deno.env.get('GEMINI_API_KEY')!;
+	const hfToken = Deno.env.get('HUGGINGFACE_TOKEN') ?? '';
 
 	const supabase = createClient(supabaseUrl, serviceRoleKey);
 
@@ -227,16 +241,19 @@ Deno.serve(async (req: Request) => {
 		const bytes = await blobData.arrayBuffer();
 		const imageBase64 = btoa(String.fromCharCode(...new Uint8Array(bytes)));
 
-		let result: MatchResult;
+		// Generate embedding and depth map in parallel
+		const [embedding, newDepthBase64] = await Promise.all([
+			generateEmbedding(geminiKey, imageBase64),
+			hfToken ? generateDepthMap(hfToken, imageBase64) : Promise.resolve(null)
+		]);
 
-		// Generate embedding for similarity search
-		const embedding = await generateEmbedding(geminiKey, imageBase64);
+		let result: MatchResult;
 
 		// Find nearest candidates via pgvector
 		const { data: matches } = await supabase.rpc('match_pieces', {
 			query_embedding: JSON.stringify(embedding),
 			match_user_id: userId,
-			match_count: 9
+			match_count: 8
 		});
 
 		const candidates: MatchPieceRow[] = matches ?? [];
@@ -245,9 +262,7 @@ Deno.serve(async (req: Request) => {
 			// No candidates — just describe
 			const text = await callGemini(geminiKey, DESCRIBE_SYSTEM_PROMPT, [
 				{ inlineData: { mimeType: 'image/jpeg', data: imageBase64 } },
-				{
-					text: 'Describe this pottery piece. Return only the JSON object.'
-				}
+				{ text: 'Describe this pottery piece. Return only the JSON object.' }
 			]);
 
 			let description: string;
@@ -289,61 +304,73 @@ Deno.serve(async (req: Request) => {
 				}
 			}
 
-			// Download candidate thumbnails in parallel
+			// Download depth maps (primary) or thumbnails (fallback) in parallel
 			const candidatesWithImages = await Promise.all(
 				candidates.map(async (c) => {
-					const coverPath = c.cover_image_id
-						? coverPathMap.get(c.cover_image_id)
-						: null;
+					const coverPath = c.cover_image_id ? coverPathMap.get(c.cover_image_id) : null;
+					let depthBase64: string | null = null;
 					let coverBase64: string | null = null;
 
 					if (coverPath) {
+						// Try depth map first
 						try {
-							// Try thumbnail first
-							const thumbPath = coverPath.replace(
-								/\/([^/]+)\.jpg$/,
-								'/thumb_$1.jpg'
-							);
-							const { data: thumbBlob } = await supabase.storage
+							const depthPath = coverPath.replace(/\/([^/]+)\.jpg$/, '/depth_$1.jpg');
+							const { data: depthBlob } = await supabase.storage
 								.from('pottery-images')
-								.download(thumbPath);
-							if (thumbBlob) {
-								const thumbBytes = await thumbBlob.arrayBuffer();
-								coverBase64 = btoa(
-									String.fromCharCode(...new Uint8Array(thumbBytes))
-								);
+								.download(depthPath);
+							if (depthBlob) {
+								const depthBytes = await depthBlob.arrayBuffer();
+								depthBase64 = btoa(String.fromCharCode(...new Uint8Array(depthBytes)));
 							}
 						} catch {
-							// Thumbnail not available — skip image for this candidate
+							// No depth map — fall back to thumbnail
+						}
+
+						if (!depthBase64) {
+							try {
+								const thumbPath = coverPath.replace(/\/([^/]+)\.jpg$/, '/thumb_$1.jpg');
+								const { data: thumbBlob } = await supabase.storage
+									.from('pottery-images')
+									.download(thumbPath);
+								if (thumbBlob) {
+									const thumbBytes = await thumbBlob.arrayBuffer();
+									coverBase64 = btoa(String.fromCharCode(...new Uint8Array(thumbBytes)));
+								}
+							} catch {
+								// Skip image for this candidate
+							}
 						}
 					}
 
-					return { ...c, coverBase64 };
+					return { ...c, depthBase64, coverBase64 };
 				})
 			);
 
-			// Build multi-image matching request
+			// Build matching request: new RGB + new depth + candidate depth maps
 			const parts: Array<
 				{ text: string } | { inlineData: { mimeType: string; data: string } }
 			> = [
-				{ text: 'Here is the NEW pottery photo to identify:' },
-				{ inlineData: { mimeType: 'image/jpeg', data: imageBase64 } },
-				{
-					text: "\nHere are the candidate pieces from this potter's collection. Compare the new photo visually against each candidate's reference photo:\n"
-				}
+				{ text: 'Here is the NEW pottery photo:' },
+				{ inlineData: { mimeType: 'image/jpeg', data: imageBase64 } }
 			];
+
+			if (newDepthBase64) {
+				parts.push({ text: 'Depth map of the new photo (brighter = closer to camera):' });
+				parts.push({ inlineData: { mimeType: 'image/jpeg', data: newDepthBase64 } });
+			}
+
+			parts.push({ text: "\nCompare the new photo against each candidate using depth maps to assess 3D profile shapes:\n" });
 
 			for (let i = 0; i < candidatesWithImages.length; i++) {
 				const c = candidatesWithImages[i];
-				parts.push({
-					text: `\n--- Candidate ${i + 1} ---\nID: ${c.id}\nName: ${c.name}`
-				});
+				parts.push({ text: `\n--- Candidate ${i + 1} ---\nID: ${c.id}\nName: ${c.name}` });
 
-				if (c.coverBase64) {
-					parts.push({ text: 'Reference photo:' });
-					parts.push({
-						inlineData: { mimeType: 'image/jpeg', data: c.coverBase64 }
-					});
+				if (c.depthBase64) {
+					parts.push({ text: 'Depth map (brighter = closer to camera):' });
+					parts.push({ inlineData: { mimeType: 'image/jpeg', data: c.depthBase64 } });
+				} else if (c.coverBase64) {
+					parts.push({ text: 'Reference photo (no depth map available):' });
+					parts.push({ inlineData: { mimeType: 'image/jpeg', data: c.coverBase64 } });
 				}
 
 				if (c.ai_description) {
@@ -354,15 +381,11 @@ Deno.serve(async (req: Request) => {
 					} catch {
 						formattedDesc = c.ai_description;
 					}
-					parts.push({
-						text: `Identity Card (supplementary):\n${formattedDesc}`
-					});
+					parts.push({ text: `Identity Card (supplementary):\n${formattedDesc}` });
 				}
 			}
 
-			parts.push({
-				text: '\nDoes the new photo match any candidate? Compare shapes, proportions, and structural features visually. Ignore color/finish differences. Return only JSON.'
-			});
+			parts.push({ text: '\nReturn only JSON.' });
 
 			const matchText = await callGemini(geminiKey, MATCH_SYSTEM_PROMPT, parts);
 			result = parseResponseJson(matchText);

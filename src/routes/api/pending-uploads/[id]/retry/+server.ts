@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { createServiceRoleClient } from '$lib/server/supabase';
 import { matchImageToPieces, describeNewPiece, generateImageEmbedding } from '$lib/server/claude';
 import { getCandidatesByEmbedding } from '$lib/server/pieces';
+import { generateDepthMap } from '$lib/server/depth';
 
 export const POST: RequestHandler = async ({ params, locals: { safeGetSession } }) => {
 	const { session, user } = await safeGetSession();
@@ -35,10 +36,11 @@ export const POST: RequestHandler = async ({ params, locals: { safeGetSession } 
 	const buffer = Buffer.from(await blob.arrayBuffer());
 
 	try {
-		// Generate embedding and description in parallel
-		const [embedding, description] = await Promise.all([
+		// Generate embedding, description, and depth map in parallel
+		const [embedding, description, depthMap] = await Promise.all([
 			generateImageEmbedding(buffer),
-			describeNewPiece(buffer, 'image/jpeg')
+			describeNewPiece(buffer, 'image/jpeg'),
+			generateDepthMap(buffer).catch(() => null)
 		]);
 
 		// Find nearest candidates by embedding similarity
@@ -54,7 +56,7 @@ export const POST: RequestHandler = async ({ params, locals: { safeGetSession } 
 				updatedDescription: description
 			};
 		} else {
-			result = await matchImageToPieces(buffer, 'image/jpeg', candidates);
+			result = await matchImageToPieces(buffer, 'image/jpeg', candidates, depthMap);
 			if (!result.updatedDescription) {
 				result.updatedDescription = description;
 			}
