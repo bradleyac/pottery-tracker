@@ -176,7 +176,7 @@ export async function matchImageToPieces(
 	});
 
 	const text = response.text ?? '';
-	console.log('[match] Gemini raw response:', text.slice(0, 500));
+	console.log('[match] Gemini raw response:', text.slice(0, 1000));
 
 	const result = parseResponseJson(text);
 	console.log('[match] parsed result:', { matchedPieceId: result.matchedPieceId, confidence: result.confidence });
