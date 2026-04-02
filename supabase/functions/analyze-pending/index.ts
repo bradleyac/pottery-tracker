@@ -262,6 +262,14 @@ Deno.serve(async (req: Request) => {
 
 		const candidates: MatchPieceRow[] = matches ?? [];
 
+		const diag: Record<string, unknown> = {
+			strategy: strategyName,
+			candidatesFound: candidates.length,
+			candidateNames: candidates.map((c) => c.name)
+		};
+
+		console.log('[analyze-pending] diagnostics:', JSON.stringify(diag));
+
 		if (candidates.length === 0) {
 			// No candidates — just describe
 			const text = await callGemini(geminiKey, DESCRIBE_SYSTEM_PROMPT, [
@@ -315,6 +323,8 @@ Deno.serve(async (req: Request) => {
 				coverPath: c.cover_image_id ? (coverPathMap.get(c.cover_image_id) ?? null) : null
 			}));
 
+			diag.step = 'gemini_comparison';
+			console.log('[analyze-pending] diagnostics (updated):', JSON.stringify(diag));
 			const { base64: newBase64, depthBase64: newDepthBase64 } = await strategy.prepareNewImage(imageBase64);
 			const matchCandidates = await strategy.fetchCandidateImages(rawCandidates);
 			const parts = strategy.buildParts(newBase64, newDepthBase64, matchCandidates);
