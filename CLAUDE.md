@@ -47,7 +47,13 @@ This is a pottery-tracking app. Users upload photos; Gemini Flash matches them t
 - **Image preprocessing**: images are resized to ≤512px via `sharp` before sending to Gemini to control token costs. Originals stored at full resolution. 512px thumbnails stored at `{user_id}/{piece_id}/thumb_{image_id}.jpg` for fast candidate retrieval during matching.
 - **Gemini Flash**: `gemini-2.5-flash` for both matching and descriptions (vision + reasoning). Uses `@google/genai` SDK on the server, REST API in the Deno edge function.
 - **Image embeddings**: `gemini-embedding-2-preview` generates 768-dim embeddings for cover images, stored in `pieces.cover_embedding` (pgvector `vector(768)` column). Used for nearest-neighbor pre-filtering before visual comparison.
-- **Matching flow**: upload → embed new image → `match_pieces` RPC (pgvector cosine similarity, top 9) → download candidate thumbnails → multi-image Gemini request (1 new + up to 9 candidate photos) → return match result. Gemini's 10-image-per-request limit caps candidates at 9.
+- **Matching flow**: upload → embed new image → `match_pieces` RPC (pgvector cosine similarity, top 8) → strategy fetches candidate images → multi-image Gemini request → return match result. Gemini's 10-image-per-request limit caps candidates at 9.
+- **Matching strategy pattern**: `src/lib/server/strategies.ts` defines `MatchingStrategy` interface with two implementations selected via `MATCHING_STRATEGY` env var (defaults to `thumbnail`):
+  - `ThumbnailStrategy` — fetches `thumb_{id}.jpg` for each candidate; RGB-only comparison prompt
+  - `DepthMapStrategy` — generates a depth map for the new image via Replicate (Depth Anything V2); fetches `depth_{id}.jpg` for candidates (falls back to thumbnail); depth-map comparison prompt
+  - Each strategy owns: image preparation, candidate image fetching, Gemini parts building, and system prompt selection
+  - `getCandidatesByEmbedding` returns `RawCandidate[]` (DB lookup + cover path only); image downloading is the strategy's responsibility
+  - Shared prompts/parsers/part-builders live in `supabase/functions/_shared/matching.ts` (used by both the SvelteKit server and the `analyze-pending` edge function)
 
 ### UI patterns
 
@@ -97,4 +103,5 @@ SUPABASE_SERVICE_ROLE_KEY
 GEMINI_API_KEY
 REPLICATE_API_TOKEN   # Replicate account — used for depth map generation (Depth Anything V2)
 REPLICATE_DEPTH_MODEL # Optional — defaults to chenxwh/depth-anything-v2:{version_hash}
+MATCHING_STRATEGY     # Optional — 'thumbnail' (default) or 'depth-map'
 ```
