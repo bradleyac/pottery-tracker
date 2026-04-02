@@ -9,7 +9,7 @@ import {
 	buildThumbnailMatchingParts,
 	type GeminiPart,
 	type MatchCandidate
-} from './matching.js';
+} from './matching.ts';
 
 export interface StrategyIO {
 	/** Download an image from storage by path. Returns base64, or null on failure. */

@@ -6,12 +6,12 @@ import {
 	parseBoundsResponse,
 	parseResponseJson,
 	type MatchResult
-} from '../_shared/matching.js';
+} from '../_shared/matching.ts';
 import {
 	createMatchingStrategy,
 	type RawCandidate,
 	type StrategyIO
-} from '../_shared/strategies.js';
+} from '../_shared/strategies.ts';
 
 const GEMINI_MODEL = 'gemini-2.5-flash';
 const EMBEDDING_MODEL = 'gemini-embedding-2-preview';
