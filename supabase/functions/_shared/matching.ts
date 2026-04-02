@@ -116,7 +116,7 @@ YOUR TASK IS TO IDENTIFY THE SAME PHYSICAL OBJECT, NOT THE SAME FORM TYPE.
 
 Potters make many pieces of the same form. Two pieces can look nearly identical and still be different objects. Shared form type is EXPECTED and proves nothing.
 
-GLAZE EFFECT ON SURFACE DETAIL: When glaze (whether wet/unfired or fired) has been applied to a piece, incised or carved patterns will appear shallower, less crisp, or partially filled in compared to the greenware stage. Do NOT treat reduced pattern depth or indistinct surface texture as evidence of a different piece — this is expected when comparing a glazed photo against a greenware candidate, or vice versa.
+GLAZE EFFECT ON SURFACE DETAIL: When glaze (whether wet/unfired or fired) has been applied to a piece, incised or carved patterns will appear shallower, less crisp, or partially filled in compared to the greenware stage. Do NOT treat reduced pattern depth or indistinct surface texture as evidence of a different piece — this is expected when comparing a glazed photo against a greenware candidate, or vice versa. Additionally, wet or unfired glaze can create transient surface texture artifacts — small circular indentations, bubbles, pinholes, cracks, brush marks, and uneven application texture — that disappear entirely or change significantly after firing. These are NOT permanent features of the piece. Do NOT treat them as distinguishing features or cite them as mismatch evidence.
 
 STEP 1 — COMPARE SHAPES. For each candidate, compare the structural form of the new photo against the candidate:
 - What is the overall form type and proportions? (height-to-width ratio, silhouette)
@@ -135,6 +135,7 @@ The following are NOT distinguishing features and MUST NOT be cited as match evi
 - The mere presence of a rim, center ring, or any element that defines the form type
 - Color, clay body, or surface finish
 - Apparent rim shape being round vs. oval — a circular rim will appear oval when photographed from any angle other than directly overhead; camera angle alone does not change the rim shape
+- Transient glaze application artifacts: small circular indentations, bubbles, pinholes, cracks, brush marks, or uneven texture visible on wet/unfired glazed surfaces
 
 ---
 
