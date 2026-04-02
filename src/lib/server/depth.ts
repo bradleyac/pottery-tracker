@@ -1,6 +1,5 @@
 import sharp from 'sharp';
 import { env } from '$env/dynamic/private';
-import { detectPieceBounds } from './claude';
 
 const DEFAULT_DEPTH_VERSION =
 	'chenxwh/depth-anything-v2:b239ea33cff32bb7abb5db39ffe9a09c14cbc2894331d1ef66fe096eed88ebd4';
@@ -16,23 +15,12 @@ export async function generateDepthMap(imageBuffer: Buffer): Promise<Buffer> {
 		.jpeg({ quality: 82 })
 		.toBuffer();
 
-	// Crop to the piece before depth estimation to maximise depth resolution
-	let cropped = resized;
+	// Trim white border left by background removal to maximise piece size in frame
+	let cropped: Buffer;
 	try {
-		const bounds = await detectPieceBounds(resized);
-		if (bounds) {
-			const { width: w = 512, height: h = 512 } = await sharp(resized).metadata();
-			const PAD = 0.05;
-			const left = Math.max(0, Math.floor((bounds.x1 - PAD) * w));
-			const top = Math.max(0, Math.floor((bounds.y1 - PAD) * h));
-			const right = Math.min(w, Math.ceil((bounds.x2 + PAD) * w));
-			const bottom = Math.min(h, Math.ceil((bounds.y2 + PAD) * h));
-			cropped = await sharp(resized)
-				.extract({ left, top, width: right - left, height: bottom - top })
-				.toBuffer();
-		}
+		cropped = await sharp(resized).trim().toBuffer();
 	} catch {
-		// Non-fatal — fall back to full resized image
+		cropped = resized;
 	}
 
 	const base64 = cropped.toString('base64');

@@ -1,9 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { Jimp } from 'https://esm.sh/jimp@1';
 import {
-	BOUNDS_PROMPT,
 	DESCRIBE_SYSTEM_PROMPT,
-	parseBoundsResponse,
 	parseResponseJson,
 	type MatchResult
 } from '../_shared/matching.ts';
@@ -87,62 +85,62 @@ async function generateEmbedding(apiKey: string, imageBase64: string): Promise<n
 const DEFAULT_DEPTH_VERSION =
 	'chenxwh/depth-anything-v2:b239ea33cff32bb7abb5db39ffe9a09c14cbc2894331d1ef66fe096eed88ebd4';
 
-async function cropToBounds(
-	imageBase64: string,
-	geminiKey: string
+const DEFAULT_BG_REMOVE_VERSION =
+	'cjwbw/rembg:fb8af171cfa1616ddcf1242c093f9c46bcada5ad4cf6f2fbe8b81b330ec5c003';
+
+async function removeBackgroundDeno(
+	replicateToken: string,
+	imageBase64: string
 ): Promise<string> {
-	// Detect piece bounds via Gemini
-	const boundsResp = await fetch(
-		`${GEMINI_API_BASE}/gemini-2.5-flash:generateContent?key=${geminiKey}`,
-		{
+	const version = Deno.env.get('REPLICATE_BG_REMOVE_MODEL') ?? DEFAULT_BG_REMOVE_VERSION;
+
+	let createResp: Response | null = null;
+	for (let attempt = 0; attempt < 5; attempt++) {
+		createResp = await fetch('https://api.replicate.com/v1/predictions', {
 			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
+			headers: {
+				Authorization: `Bearer ${replicateToken}`,
+				'Content-Type': 'application/json',
+				Prefer: 'wait'
+			},
 			body: JSON.stringify({
-				contents: [{
-					role: 'user',
-					parts: [
-						{ inlineData: { mimeType: 'image/jpeg', data: imageBase64 } },
-						{ text: BOUNDS_PROMPT }
-					]
-				}],
-				generationConfig: { responseMimeType: 'application/json' }
-			})
-		}
-	);
-
-	if (!boundsResp.ok) return imageBase64;
-
-	const boundsData = await boundsResp.json();
-	const boundsText: string = boundsData.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-	const bounds = parseBoundsResponse(boundsText);
-	if (!bounds) return imageBase64;
-
-	// Crop using jimp
-	try {
-		const PAD = 0.05;
-		const imgBytes = Uint8Array.from(atob(imageBase64), (c) => c.charCodeAt(0));
-		const image = await Jimp.fromBuffer(imgBytes.buffer);
-		const w = image.width;
-		const h = image.height;
-		const left = Math.max(0, Math.floor((bounds.x1 - PAD) * w));
-		const top = Math.max(0, Math.floor((bounds.y1 - PAD) * h));
-		const right = Math.min(w, Math.ceil((bounds.x2 + PAD) * w));
-		const bottom = Math.min(h, Math.ceil((bounds.y2 + PAD) * h));
-		image.crop({ x: left, y: top, w: right - left, h: bottom - top });
-		const croppedBuffer = await image.getBuffer('image/jpeg');
-		return btoa(String.fromCharCode(...new Uint8Array(croppedBuffer)));
-	} catch {
-		return imageBase64;
+				version,
+				input: { image: `data:image/jpeg;base64,${imageBase64}` }
+			}),
+			signal: AbortSignal.timeout(60_000)
+		});
+		if (createResp.status !== 429) break;
+		const retryBody = await createResp.json().catch(() => ({}));
+		const waitMs = ((retryBody.retry_after ?? 1) + 1) * 1000;
+		console.log(`[analyze-pending] BG remove rate limited, retrying in ${waitMs}ms (attempt ${attempt + 1})`);
+		await new Promise((resolve) => setTimeout(resolve, waitMs));
 	}
+
+	if (!createResp!.ok) throw new Error(`Background removal failed: ${createResp!.status}`);
+
+	const prediction = await createResp!.json();
+	if (prediction.status === 'failed') throw new Error('Background removal prediction failed');
+
+	const outputUrl: string = prediction.output;
+	if (!outputUrl) throw new Error('Background removal returned no output');
+
+	const pngResp = await fetch(outputUrl, { signal: AbortSignal.timeout(30_000) });
+	if (!pngResp.ok) throw new Error(`Failed to download background-removed image: ${pngResp.status}`);
+
+	const pngBytes = new Uint8Array(await pngResp.arrayBuffer());
+
+	// Composite onto white using Jimp
+	const pngImage = await Jimp.fromBuffer(pngBytes.buffer as ArrayBuffer);
+	const white = new Jimp({ width: pngImage.width, height: pngImage.height, color: 0xFFFFFFFF });
+	white.composite(pngImage, 0, 0);
+	const jpegBuffer = await white.getBuffer('image/jpeg');
+	return btoa(String.fromCharCode(...new Uint8Array(jpegBuffer)));
 }
 
 async function generateDepthMapFromReplicate(
 	replicateToken: string,
-	imageBase64: string,
-	geminiKey: string
+	imageBase64: string
 ): Promise<string | null> {
-	const croppedBase64 = await cropToBounds(imageBase64, geminiKey).catch(() => imageBase64);
-
 	const version = Deno.env.get('REPLICATE_DEPTH_MODEL') ?? DEFAULT_DEPTH_VERSION;
 	let createResp: Response | null = null;
 	for (let attempt = 0; attempt < 5; attempt++) {
@@ -155,7 +153,7 @@ async function generateDepthMapFromReplicate(
 			},
 			body: JSON.stringify({
 				version,
-				input: { image: `data:image/jpeg;base64,${croppedBase64}`, model_size: 'Base' }
+				input: { image: `data:image/jpeg;base64,${imageBase64}`, model_size: 'Base' }
 			}),
 			signal: AbortSignal.timeout(90_000)
 		});
@@ -215,6 +213,24 @@ Deno.serve(async (req: Request) => {
 		const bytes = await blobData.arrayBuffer();
 		const imageBase64 = btoa(String.fromCharCode(...new Uint8Array(bytes)));
 
+		// Remove background for cleaner embedding and matching — non-fatal, store clean temp
+		let cleanImageBase64 = imageBase64;
+		if (replicateToken) {
+			try {
+				cleanImageBase64 = await removeBackgroundDeno(replicateToken, imageBase64);
+				const cleanTempPath = tempPath.replace(/([^/]+\.jpg)$/, 'clean_$1');
+				const cleanBytes = Uint8Array.from(atob(cleanImageBase64), (c) => c.charCodeAt(0));
+				await supabase.storage.from('pottery-images').upload(cleanTempPath, cleanBytes, {
+					contentType: 'image/jpeg',
+					upsert: true
+				});
+				console.log('[analyze-pending] background removal complete');
+			} catch (err) {
+				console.warn('[analyze-pending] background removal failed (non-fatal):', err);
+				cleanImageBase64 = imageBase64;
+			}
+		}
+
 		// Read matching strategy from DB
 		const { data: configData } = await supabase
 			.from('app_config')
@@ -223,7 +239,7 @@ Deno.serve(async (req: Request) => {
 			.single();
 		const strategyName = configData?.value ?? 'thumbnail';
 
-		// Build Deno IO adapter — closures capture supabase, tempPath, replicateToken, geminiKey
+		// Build Deno IO adapter — closures capture supabase, tempPath, replicateToken
 		const denoIO: StrategyIO = {
 			downloadImage: async (path) => {
 				try {
@@ -244,12 +260,12 @@ Deno.serve(async (req: Request) => {
 					return prebuilt;
 				}
 				if (!replicateToken) return null;
-				return generateDepthMapFromReplicate(replicateToken, base64, geminiKey);
+				return generateDepthMapFromReplicate(replicateToken, base64);
 			}
 		};
 
 		const strategy = createMatchingStrategy(strategyName, denoIO);
-		const embedding = await generateEmbedding(geminiKey, imageBase64);
+		const embedding = await generateEmbedding(geminiKey, cleanImageBase64);
 
 		let result: MatchResult;
 
@@ -324,7 +340,7 @@ Deno.serve(async (req: Request) => {
 			}));
 
 			console.log('[analyze-pending] step: gemini_comparison');
-			const { base64: newBase64, depthBase64: newDepthBase64 } = await strategy.prepareNewImage(imageBase64);
+			const { base64: newBase64, depthBase64: newDepthBase64 } = await strategy.prepareNewImage(cleanImageBase64);
 			const matchCandidates = await strategy.fetchCandidateImages(rawCandidates);
 			const parts = strategy.buildParts(newBase64, newDepthBase64, matchCandidates);
 			const matchText = await callGemini(geminiKey, strategy.systemPrompt, parts);

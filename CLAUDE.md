@@ -101,7 +101,8 @@ PUBLIC_SUPABASE_URL
 PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
 GEMINI_API_KEY
-REPLICATE_API_TOKEN   # Replicate account — used for depth map generation (Depth Anything V2)
-REPLICATE_DEPTH_MODEL # Optional — defaults to chenxwh/depth-anything-v2:{version_hash}
-MATCHING_STRATEGY     # Optional — 'thumbnail' (default) or 'depth-map'
+REPLICATE_API_TOKEN      # Replicate account — used for background removal and depth map generation
+REPLICATE_BG_REMOVE_MODEL # Optional — defaults to cjwbw/rembg:{version_hash}
+REPLICATE_DEPTH_MODEL    # Optional — defaults to chenxwh/depth-anything-v2:{version_hash}
+MATCHING_STRATEGY        # Optional — 'thumbnail' (default) or 'depth-map'
 ```

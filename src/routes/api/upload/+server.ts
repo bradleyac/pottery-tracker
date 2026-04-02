@@ -2,6 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { matchImageToPieces, describeNewPiece, generateImageEmbedding } from '$lib/server/claude';
 import { uploadImage } from '$lib/server/storage';
+import { removeBackground } from '$lib/server/bgremove';
 import {
 	getExistingPiecesForMatching,
 	getPieceCoverUrls,
@@ -36,6 +37,11 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 
 	await uploadImage(buffer, tempPath, mediaType);
 
+	// Remove background for cleaner embedding and matching — fall back to original on failure
+	const cleanTempPath = `${user.id}/temp/clean_${tempId}.jpg`;
+	const cleanBuffer = await removeBackground(buffer).catch(() => buffer);
+	await uploadImage(cleanBuffer, cleanTempPath, 'image/jpeg').catch(() => {});
+
 	// Get all pieces (for UI dropdown) and cover paths (for signed URLs)
 	const { existingPieces, coverPathMap } = await getExistingPiecesForMatching(user.id);
 
@@ -55,7 +61,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 	} else {
 		const strategy = await getMatchingStrategy();
 		const [embedding, description] = await Promise.all([
-			generateImageEmbedding(buffer),
+			generateImageEmbedding(cleanBuffer),
 			describeNewPiece(buffer, mediaType)
 		]);
 
@@ -78,7 +84,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 			};
 		} else {
 			diag.step = 'gemini_comparison';
-			matchResult = await matchImageToPieces(buffer, mediaType, candidates, strategy);
+			matchResult = await matchImageToPieces(cleanBuffer, 'image/jpeg', candidates, strategy);
 			if (!matchResult.updatedDescription) {
 				matchResult.updatedDescription = description;
 			}

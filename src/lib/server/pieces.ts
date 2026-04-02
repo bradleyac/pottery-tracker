@@ -5,9 +5,11 @@ import {
 	buildStoragePath,
 	buildThumbnailPath,
 	buildDepthMapPath,
+	buildCleanImagePath,
 	getSignedUrls,
 	downloadImage
 } from './storage';
+import { removeBackground } from './bgremove';
 import { describeNewPiece, resizeForApi, generateImageEmbedding } from './claude';
 import { generateDepthMap } from './depth';
 import type { ExistingPiece } from './claude';
@@ -85,11 +87,19 @@ export async function createPieceFromTemp(
 
 	await uploadImage(buffer, permanentPath, 'image/jpeg');
 
+	// Try to reuse the pre-built clean temp (stored by upload endpoint); fall back to running removal
+	const cleanTempPath = tempPath.replace(/([^/]+\.jpg)$/, 'clean_$1');
+	const { data: cleanTempData } = await supabase.storage.from('pottery-images').download(cleanTempPath);
+	const cleanBuffer = cleanTempData
+		? Buffer.from(await cleanTempData.arrayBuffer())
+		: await removeBackground(buffer).catch(() => buffer);
+
 	try {
 		await deleteImage(tempPath);
 	} catch {
 		// ignore
 	}
+	await deleteImage(cleanTempPath).catch(() => {});
 
 	let aiDescription = updatedDescription ?? null;
 	if (!aiDescription) {
@@ -100,28 +110,35 @@ export async function createPieceFromTemp(
 		}
 	}
 
-	// Store 512px thumbnail for matching
+	// Store background-removed image for future reprocessing
 	try {
-		const { data: thumbData, mimeType: thumbMime } = await resizeForApi(buffer);
+		await uploadImage(cleanBuffer, buildCleanImagePath(userId, pieceId, imageId), 'image/jpeg');
+	} catch {
+		// Non-fatal
+	}
+
+	// Store 512px thumbnail for matching (from clean image)
+	try {
+		const { data: thumbData, mimeType: thumbMime } = await resizeForApi(cleanBuffer);
 		const thumbPath = buildThumbnailPath(userId, pieceId, imageId);
 		await uploadImage(Buffer.from(thumbData, 'base64'), thumbPath, thumbMime);
 	} catch {
 		// Non-fatal — matching will work without thumbnail
 	}
 
-	// Store depth map for 3D profile matching
+	// Store depth map for 3D profile matching (from clean image)
 	try {
-		const depthBuffer = await generateDepthMap(buffer);
+		const depthBuffer = await generateDepthMap(cleanBuffer);
 		const depthPath = buildDepthMapPath(userId, pieceId, imageId);
 		await uploadImage(depthBuffer, depthPath, 'image/jpeg');
 	} catch (err) {
 		console.error('Depth map generation failed (non-fatal):', err);
 	}
 
-	// Generate embedding for cover image
+	// Generate embedding for cover image (from clean image)
 	let embedding: number[] | null = null;
 	try {
-		embedding = await generateImageEmbedding(buffer);
+		embedding = await generateImageEmbedding(cleanBuffer);
 	} catch {
 		// Non-fatal — piece won't appear as a candidate until embedding is generated
 	}
@@ -180,11 +197,19 @@ export async function addImageToExistingPiece(
 
 	await uploadImage(buffer, permanentPath, 'image/jpeg');
 
+	// Try to reuse the pre-built clean temp (stored by upload endpoint or edge function)
+	const cleanTempPath = tempPath.replace(/([^/]+\.jpg)$/, 'clean_$1');
+	const { data: cleanTempData } = await supabase.storage.from('pottery-images').download(cleanTempPath);
+	const cleanBuffer = cleanTempData
+		? Buffer.from(await cleanTempData.arrayBuffer())
+		: await removeBackground(buffer).catch(() => buffer);
+
 	try {
 		await deleteImage(tempPath);
 	} catch {
 		// Non-fatal
 	}
+	await deleteImage(cleanTempPath).catch(() => {});
 
 	const isFirstImage = !piece.cover_image_id;
 	const { error: insertError } = await supabase.from('images').insert({
@@ -202,9 +227,15 @@ export async function addImageToExistingPiece(
 	if (isFirstImage) {
 		updates.cover_image_id = imageId;
 
-		// Store thumbnail and embedding for the new cover image
+		// Store background-removed image, thumbnail, depth map, and embedding from clean image
 		try {
-			const { data: thumbData, mimeType: thumbMime } = await resizeForApi(buffer);
+			await uploadImage(cleanBuffer, buildCleanImagePath(userId, pieceId, imageId), 'image/jpeg');
+		} catch {
+			// Non-fatal
+		}
+
+		try {
+			const { data: thumbData, mimeType: thumbMime } = await resizeForApi(cleanBuffer);
 			const thumbPath = buildThumbnailPath(userId, pieceId, imageId);
 			await uploadImage(Buffer.from(thumbData, 'base64'), thumbPath, thumbMime);
 		} catch {
@@ -212,7 +243,7 @@ export async function addImageToExistingPiece(
 		}
 
 		try {
-			const depthBuffer = await generateDepthMap(buffer);
+			const depthBuffer = await generateDepthMap(cleanBuffer);
 			const depthPath = buildDepthMapPath(userId, pieceId, imageId);
 			await uploadImage(depthBuffer, depthPath, 'image/jpeg');
 		} catch {
@@ -220,7 +251,7 @@ export async function addImageToExistingPiece(
 		}
 
 		try {
-			const embedding = await generateImageEmbedding(buffer);
+			const embedding = await generateImageEmbedding(cleanBuffer);
 			updates.cover_embedding = JSON.stringify(embedding);
 		} catch {
 			// Non-fatal
