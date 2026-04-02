@@ -1,17 +1,17 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { Jimp } from 'https://esm.sh/jimp@1';
 import {
-	DESCRIBE_SYSTEM_PROMPT,
 	BOUNDS_PROMPT,
-	parseResponseJson,
+	DESCRIBE_SYSTEM_PROMPT,
 	parseBoundsResponse,
+	parseResponseJson,
 	type MatchResult
-} from '../_shared/matching.ts';
+} from '../_shared/matching.js';
 import {
 	createMatchingStrategy,
-	type StrategyIO,
-	type RawCandidate
-} from '../_shared/strategies.ts';
+	type RawCandidate,
+	type StrategyIO
+} from '../_shared/strategies.js';
 
 const GEMINI_MODEL = 'gemini-2.5-flash';
 const EMBEDDING_MODEL = 'gemini-embedding-2-preview';

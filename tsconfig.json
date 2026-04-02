@@ -19,6 +19,6 @@
 		"src/**/*.js",
 		"src/**/*.ts",
 		"src/**/*.svelte",
-		"supabase/functions/_shared/**/*.ts"
+		"supabase/functions/**/*.ts"
 	]
 }

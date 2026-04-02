@@ -7,8 +7,8 @@ import {
 	THUMBNAIL_MATCH_SYSTEM_PROMPT,
 	buildMatchingParts,
 	buildThumbnailMatchingParts,
-	type MatchCandidate,
-	type GeminiPart
+	type GeminiPart,
+	type MatchCandidate
 } from './matching.js';
 
 export interface StrategyIO {
@@ -37,7 +37,7 @@ class DepthMapStrategy implements MatchingStrategy {
 	readonly name = 'depth-map';
 	readonly systemPrompt = MATCH_SYSTEM_PROMPT;
 
-	constructor(private io: StrategyIO) {}
+	constructor(private io: StrategyIO) { }
 
 	async prepareNewImage(imageBase64: string): Promise<{ base64: string; depthBase64: string | null }> {
 		const depthBase64 = await this.io.generateDepthMap(imageBase64);
@@ -73,7 +73,7 @@ class ThumbnailStrategy implements MatchingStrategy {
 	readonly name = 'thumbnail';
 	readonly systemPrompt = THUMBNAIL_MATCH_SYSTEM_PROMPT;
 
-	constructor(private io: StrategyIO) {}
+	constructor(private io: StrategyIO) { }
 
 	async prepareNewImage(imageBase64: string): Promise<{ base64: string; depthBase64: string | null }> {
 		return { base64: imageBase64, depthBase64: null };
