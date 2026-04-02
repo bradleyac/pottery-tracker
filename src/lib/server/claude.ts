@@ -72,7 +72,8 @@ export async function matchImageToPieces(
 		};
 	}
 
-	const { base64: newBase64, depthBase64: newDepthBase64 } = await strategy.prepareNewImage(imageBuffer);
+	const { data: resizedBase64 } = await resizeForApi(imageBuffer);
+	const { base64: newBase64, depthBase64: newDepthBase64 } = await strategy.prepareNewImage(resizedBase64);
 	const candidates = await strategy.fetchCandidateImages(rawCandidates);
 	const parts = strategy.buildParts(newBase64, newDepthBase64, candidates);
 

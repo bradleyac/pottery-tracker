@@ -53,7 +53,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 			updatedDescription: description
 		};
 	} else {
-		const strategy = getMatchingStrategy();
+		const strategy = await getMatchingStrategy();
 		const [embedding, description] = await Promise.all([
 			generateImageEmbedding(buffer),
 			describeNewPiece(buffer, mediaType)

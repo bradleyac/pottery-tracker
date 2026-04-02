@@ -36,7 +36,7 @@ export const POST: RequestHandler = async ({ params, locals: { safeGetSession } 
 	const buffer = Buffer.from(await blob.arrayBuffer());
 
 	try {
-		const strategy = getMatchingStrategy();
+		const strategy = await getMatchingStrategy();
 		const [embedding, description] = await Promise.all([
 			generateImageEmbedding(buffer),
 			describeNewPiece(buffer, 'image/jpeg')
