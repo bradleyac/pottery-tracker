@@ -323,8 +323,7 @@ Deno.serve(async (req: Request) => {
 				coverPath: c.cover_image_id ? (coverPathMap.get(c.cover_image_id) ?? null) : null
 			}));
 
-			diag.step = 'gemini_comparison';
-			console.log('[analyze-pending] diagnostics (updated):', JSON.stringify(diag));
+			console.log('[analyze-pending] step: gemini_comparison');
 			const { base64: newBase64, depthBase64: newDepthBase64 } = await strategy.prepareNewImage(imageBase64);
 			const matchCandidates = await strategy.fetchCandidateImages(rawCandidates);
 			const parts = strategy.buildParts(newBase64, newDepthBase64, matchCandidates);
