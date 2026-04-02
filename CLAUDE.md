@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Branching
+
+**Always create a feature branch before making any code changes — no exceptions, including one-line fixes.**
+
+```bash
+git checkout -b fix/short-description   # or feature/short-description
+```
+
+If already on `main` with uncommitted changes: stash → create branch → pop → commit. Never edit files while on `main`. Commit each logical change individually so work is reversible.
+
 ## Commands
 
 ```bash

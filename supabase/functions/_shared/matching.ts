@@ -87,10 +87,10 @@ The following are NOT distinguishing features and MUST NOT be cited as match evi
 
 ---
 
-Respond with this JSON structure:
+Respond with a SINGLE JSON object representing your BEST match across all candidates (the one with the highest confidence, or null if none qualify). Do NOT return an array.
 
 {
-  "matchedPieceId": "<uuid or null>",
+  "matchedPieceId": "<uuid of best matching candidate, or null>",
   "confidence": <0.0–1.0>,
   "depth_comparison": "<describe what the depth maps reveal about the profile shapes of each structural element, and whether they match>",
   "distinguishing_feature": "<a specific quirk visible in both photos confirming same object, OR 'consistent overall' if profiles and decoration match with no contradicting evidence, OR 'profile mismatch' if depth profiles differ>",
@@ -100,6 +100,7 @@ Respond with this JSON structure:
 }
 
 Rules:
+- Return ONE object only — your single best match, not one object per candidate
 - If distinguishing_feature is 'profile mismatch', matchedPieceId MUST be null
 - If distinguishing_feature is 'none found', matchedPieceId MUST be null
 - Set matchedPieceId to null when confidence < 0.70
@@ -129,8 +130,12 @@ export function parseResponseJson(text: string): MatchResult {
 
 	try {
 		const raw = JSON.parse(cleaned);
-		// Gemini sometimes wraps the response in an array
-		const parsed = Array.isArray(raw) ? raw[0] : raw;
+		// Prompt asks for a single object, but if Gemini returns an array pick the highest-confidence entry
+		const parsed = Array.isArray(raw)
+			? (raw as { confidence?: number }[]).reduce((best, cur) =>
+					(cur.confidence ?? 0) > (best.confidence ?? 0) ? cur : best
+				)
+			: raw;
 		// updatedDescription may be a JSON object (structured identity card) or a string
 		let updatedDescription = parsed.updatedDescription ?? '';
 		if (typeof updatedDescription === 'object' && updatedDescription !== null) {
