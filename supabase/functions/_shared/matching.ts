@@ -116,14 +116,16 @@ YOUR TASK IS TO IDENTIFY THE SAME PHYSICAL OBJECT, NOT THE SAME FORM TYPE.
 
 Potters make many pieces of the same form. Two pieces can look nearly identical and still be different objects. Shared form type is EXPECTED and proves nothing.
 
+GLAZE EFFECT ON SURFACE DETAIL: When glaze (whether wet/unfired or fired) has been applied to a piece, incised or carved patterns will appear shallower, less crisp, or partially filled in compared to the greenware stage. Do NOT treat reduced pattern depth or indistinct surface texture as evidence of a different piece — this is expected when comparing a glazed photo against a greenware candidate, or vice versa.
+
 STEP 1 — COMPARE SHAPES. For each candidate, compare the structural form of the new photo against the candidate:
 - What is the overall form type and proportions? (height-to-width ratio, silhouette)
 - What is the rim style? (flat, upturned, drooping, flared)
 - Are there handles, spouts, or other structural elements? Where are they positioned?
-- Are there any distinctive surface decorations, textures, or marks?
+- Are there any distinctive surface decorations, textures, or marks? (account for glaze obscuring incised detail)
 - Are there any asymmetries, irregularities, or unique imperfections?
 
-STEP 2 — If any structural element clearly differs between the new photo and a candidate, they are DIFFERENT PIECES.
+STEP 2 — If any structural element clearly differs between the new photo and a candidate, they are DIFFERENT PIECES. Do not disqualify based on incised patterns appearing less distinct if glaze may have been applied.
 
 STEP 3 — Only if overall shapes are consistent, look for a specific distinguishing quirk that confirms it is the exact same object (an asymmetry, off-center element, irregularity at a specific location).
 
@@ -132,6 +134,7 @@ The following are NOT distinguishing features and MUST NOT be cited as match evi
 - Circular or round shape
 - The mere presence of a rim, center ring, or any element that defines the form type
 - Color, clay body, or surface finish
+- Apparent rim shape being round vs. oval — a circular rim will appear oval when photographed from any angle other than directly overhead; camera angle alone does not change the rim shape
 
 ---
 
