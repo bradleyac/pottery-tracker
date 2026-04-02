@@ -47,8 +47,7 @@ export interface MatchCandidate {
 	id: string;
 	name: string;
 	ai_description: string | null;
-	depthBase64: string | null;
-	coverBase64: string | null;
+	imageBase64: string | null; // depth map or thumbnail — strategy's choice
 }
 
 export type GeminiPart =
@@ -106,6 +105,55 @@ Rules:
 - Set matchedPieceId to null when confidence < 0.70
 - Confidence 0.70–0.84: possible match with noted uncertainty
 - Confidence 0.85+: strong match — depth profiles consistent AND overall form/decoration consistent with no contradicting evidence`;
+
+export const THUMBNAIL_MATCH_SYSTEM_PROMPT = `You are a pottery analyst. Your job is to determine whether a new photo shows the EXACT SAME PHYSICAL OBJECT as a candidate piece, or a different piece.
+
+IMPORTANT — pottery stages: Greenware → Bisqueware → Glazed/Fired. Color, surface finish, and texture change completely across stages. Shape and structural features persist. Ignore color/finish differences.
+
+---
+
+YOUR TASK IS TO IDENTIFY THE SAME PHYSICAL OBJECT, NOT THE SAME FORM TYPE.
+
+Potters make many pieces of the same form. Two pieces can look nearly identical and still be different objects. Shared form type is EXPECTED and proves nothing.
+
+STEP 1 — COMPARE SHAPES. For each candidate, compare the structural form of the new photo against the candidate:
+- What is the overall form type and proportions? (height-to-width ratio, silhouette)
+- What is the rim style? (flat, upturned, drooping, flared)
+- Are there handles, spouts, or other structural elements? Where are they positioned?
+- Are there any distinctive surface decorations, textures, or marks?
+- Are there any asymmetries, irregularities, or unique imperfections?
+
+STEP 2 — If any structural element clearly differs between the new photo and a candidate, they are DIFFERENT PIECES.
+
+STEP 3 — Only if overall shapes are consistent, look for a specific distinguishing quirk that confirms it is the exact same object (an asymmetry, off-center element, irregularity at a specific location).
+
+The following are NOT distinguishing features and MUST NOT be cited as match evidence:
+- Throwing rings or wheel marks
+- Circular or round shape
+- The mere presence of a rim, center ring, or any element that defines the form type
+- Color, clay body, or surface finish
+
+---
+
+Respond with a SINGLE JSON object representing your BEST match across all candidates (the one with the highest confidence, or null if none qualify). Do NOT return an array.
+
+{
+  "matchedPieceId": "<uuid of best matching candidate, or null>",
+  "confidence": <0.0–1.0>,
+  "depth_comparison": "<describe how the shape and structural features of the new photo compare to the candidate>",
+  "distinguishing_feature": "<a specific quirk visible in both photos confirming same object, OR 'consistent overall' if form and decoration match with no contradicting evidence, OR 'profile mismatch' if structural features differ>",
+  "reasoning": "<cite specific visual observations; if features differ or no distinguishing feature was found, say so explicitly>",
+  "suggestedName": "<name if new piece, empty string if matched>",
+  "updatedDescription": "<brief description of the piece's key physical features>"
+}
+
+Rules:
+- Return ONE object only — your single best match, not one object per candidate
+- If distinguishing_feature is 'profile mismatch', matchedPieceId MUST be null
+- If distinguishing_feature is 'none found', matchedPieceId MUST be null
+- Set matchedPieceId to null when confidence < 0.70
+- Confidence 0.70–0.84: possible match with noted uncertainty
+- Confidence 0.85+: strong match — form and decoration consistent with no contradicting evidence`;
 
 export const DESCRIBE_SYSTEM_PROMPT = `You are an expert pottery analyst. Describe this pottery piece's key physical features
 in a brief text summary. This description serves as supplementary context alongside photos for matching.
@@ -196,12 +244,46 @@ export function buildMatchingParts(
 		const c = candidates[i];
 		parts.push({ text: `\n--- Candidate ${i + 1} ---\nID: ${c.id}\nName: ${c.name}` });
 
-		if (c.depthBase64) {
+		if (c.imageBase64) {
 			parts.push({ text: 'Depth map (brighter = closer to camera):' });
-			parts.push({ inlineData: { mimeType: 'image/jpeg', data: c.depthBase64 } });
-		} else if (c.coverBase64) {
-			parts.push({ text: 'Reference photo (no depth map available):' });
-			parts.push({ inlineData: { mimeType: 'image/jpeg', data: c.coverBase64 } });
+			parts.push({ inlineData: { mimeType: 'image/jpeg', data: c.imageBase64 } });
+		}
+
+		if (c.ai_description) {
+			let formattedDesc: string;
+			try {
+				const parsed = JSON.parse(c.ai_description);
+				formattedDesc = JSON.stringify(parsed, null, 2);
+			} catch {
+				formattedDesc = c.ai_description;
+			}
+			parts.push({ text: `Identity Card (supplementary):\n${formattedDesc}` });
+		}
+	}
+
+	parts.push({ text: '\nReturn only JSON.' });
+
+	return parts;
+}
+
+export function buildThumbnailMatchingParts(
+	newImageBase64: string,
+	candidates: MatchCandidate[]
+): GeminiPart[] {
+	const parts: GeminiPart[] = [
+		{ text: 'Here is the NEW pottery photo:' },
+		{ inlineData: { mimeType: 'image/jpeg', data: newImageBase64 } }
+	];
+
+	parts.push({ text: '\nCompare the new photo against each candidate:\n' });
+
+	for (let i = 0; i < candidates.length; i++) {
+		const c = candidates[i];
+		parts.push({ text: `\n--- Candidate ${i + 1} ---\nID: ${c.id}\nName: ${c.name}` });
+
+		if (c.imageBase64) {
+			parts.push({ text: 'Reference photo:' });
+			parts.push({ inlineData: { mimeType: 'image/jpeg', data: c.imageBase64 } });
 		}
 
 		if (c.ai_description) {

@@ -11,6 +11,7 @@ import {
 import { describeNewPiece, resizeForApi, generateImageEmbedding } from './claude';
 import { generateDepthMap } from './depth';
 import type { ExistingPiece } from './claude';
+import type { RawCandidate } from './strategies';
 import { randomUUID } from 'crypto';
 
 export type { ExistingPiece };
@@ -319,7 +320,7 @@ export async function getCandidatesByEmbedding(
 	userId: string,
 	embedding: number[],
 	limit = 8
-): Promise<ExistingPiece[]> {
+): Promise<RawCandidate[]> {
 	const supabase = createServiceRoleClient();
 
 	const { data: matches, error } = await supabase.rpc('match_pieces', {
@@ -335,18 +336,14 @@ export async function getCandidatesByEmbedding(
 		| null;
 	if (!matchRows || matchRows.length === 0) return [];
 
-	// Get cover image paths for thumbnail download
-	const coverImageIds = matchRows
-		.map((m) => m.cover_image_id)
-		.filter(Boolean) as string[];
-
+	// Resolve cover image storage paths
+	const coverImageIds = matchRows.map((m) => m.cover_image_id).filter(Boolean) as string[];
 	const coverPathMap = new Map<string, string>();
 	if (coverImageIds.length > 0) {
 		const { data: coverImages } = await supabase
 			.from('images')
-			.select('id, storage_path, piece_id, user_id')
+			.select('id, storage_path')
 			.in('id', coverImageIds);
-
 		if (coverImages) {
 			for (const img of coverImages) {
 				coverPathMap.set(img.id, img.storage_path);
@@ -354,53 +351,12 @@ export async function getCandidatesByEmbedding(
 		}
 	}
 
-	// Download depth maps (primary) and thumbnails (fallback) in parallel
-	const candidates = await Promise.all(
-		matchRows.map(async (m) => {
-			const coverPath = m.cover_image_id ? coverPathMap.get(m.cover_image_id) : null;
-			let depthMapBase64: string | null = null;
-			let coverImageBase64: string | null = null;
-
-			if (coverPath) {
-				// Try depth map first
-				try {
-					const depthPath = coverPath.replace(/\/([^/]+)\.jpg$/, '/depth_$1.jpg');
-					const depthBuffer = await downloadImage(depthPath);
-					depthMapBase64 = depthBuffer.toString('base64');
-				} catch {
-					// No depth map — fall back to thumbnail for this candidate
-				}
-
-				// Always try to get thumbnail as fallback
-				if (!depthMapBase64) {
-					try {
-						const thumbPath = coverPath.replace(/\/([^/]+)\.jpg$/, '/thumb_$1.jpg');
-						const thumbBuffer = await downloadImage(thumbPath);
-						coverImageBase64 = thumbBuffer.toString('base64');
-					} catch {
-						try {
-							const fullBuffer = await downloadImage(coverPath);
-							const { data } = await resizeForApi(fullBuffer);
-							coverImageBase64 = data;
-						} catch {
-							// Skip this candidate's image
-						}
-					}
-				}
-			}
-
-			return {
-				id: m.id,
-				name: m.name,
-				ai_description: m.ai_description,
-				cover_storage_path: coverPath ?? null,
-				coverImageBase64,
-				depthMapBase64
-			} satisfies ExistingPiece;
-		})
-	);
-
-	return candidates;
+	return matchRows.map((m) => ({
+		id: m.id,
+		name: m.name,
+		ai_description: m.ai_description,
+		coverPath: m.cover_image_id ? (coverPathMap.get(m.cover_image_id) ?? null) : null
+	}));
 }
 
 export async function getPieceCoverUrls(

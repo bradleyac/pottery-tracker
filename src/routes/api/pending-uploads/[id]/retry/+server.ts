@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { createServiceRoleClient } from '$lib/server/supabase';
 import { matchImageToPieces, describeNewPiece, generateImageEmbedding } from '$lib/server/claude';
 import { getCandidatesByEmbedding } from '$lib/server/pieces';
-import { generateDepthMap } from '$lib/server/depth';
+import { getMatchingStrategy } from '$lib/server/strategies';
 
 export const POST: RequestHandler = async ({ params, locals: { safeGetSession } }) => {
 	const { session, user } = await safeGetSession();
@@ -36,14 +36,12 @@ export const POST: RequestHandler = async ({ params, locals: { safeGetSession } 
 	const buffer = Buffer.from(await blob.arrayBuffer());
 
 	try {
-		// Generate embedding, description, and depth map in parallel
-		const [embedding, description, depthMap] = await Promise.all([
+		const strategy = getMatchingStrategy();
+		const [embedding, description] = await Promise.all([
 			generateImageEmbedding(buffer),
-			describeNewPiece(buffer, 'image/jpeg'),
-			generateDepthMap(buffer).catch(() => null)
+			describeNewPiece(buffer, 'image/jpeg')
 		]);
 
-		// Find nearest candidates by embedding similarity
 		const candidates = await getCandidatesByEmbedding(user.id, embedding);
 
 		let result;
@@ -56,7 +54,7 @@ export const POST: RequestHandler = async ({ params, locals: { safeGetSession } 
 				updatedDescription: description
 			};
 		} else {
-			result = await matchImageToPieces(buffer, 'image/jpeg', candidates, depthMap);
+			result = await matchImageToPieces(buffer, 'image/jpeg', candidates, strategy);
 			if (!result.updatedDescription) {
 				result.updatedDescription = description;
 			}

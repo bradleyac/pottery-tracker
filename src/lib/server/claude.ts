@@ -3,13 +3,13 @@ import sharp from 'sharp';
 import type { ClaudeMatchResult } from '$lib/types';
 import { env } from '$env/dynamic/private';
 import {
-	MATCH_SYSTEM_PROMPT,
 	DESCRIBE_SYSTEM_PROMPT,
 	BOUNDS_PROMPT,
 	parseResponseJson,
-	parseBoundsResponse,
-	buildMatchingParts
+	parseBoundsResponse
 } from '../../../supabase/functions/_shared/matching.js';
+import type { MatchingStrategy } from './strategies';
+import type { RawCandidate } from './strategies';
 
 const MATCH_MODEL = 'gemini-2.5-flash';
 const DESCRIBE_MODEL = 'gemini-2.5-flash';
@@ -18,13 +18,12 @@ function getClient() {
 	return new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
 }
 
+// ExistingPiece: used by getExistingPiecesForMatching / getPieceCoverUrls (non-matching contexts)
 export type ExistingPiece = {
 	id: string;
 	name: string;
 	ai_description: string | null;
 	cover_storage_path?: string | null;
-	coverImageBase64?: string | null;
-	depthMapBase64?: string | null;
 };
 
 type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
@@ -58,11 +57,11 @@ export async function generateImageEmbedding(imageBuffer: Buffer): Promise<numbe
 export async function matchImageToPieces(
 	imageBuffer: Buffer,
 	mediaType: ImageMediaType,
-	candidates: ExistingPiece[],
-	depthMapBuffer?: Buffer | null
+	rawCandidates: RawCandidate[],
+	strategy: MatchingStrategy
 ): Promise<ClaudeMatchResult> {
 	// No candidates → skip matching, just describe
-	if (candidates.length === 0) {
+	if (rawCandidates.length === 0) {
 		const description = await describeNewPiece(imageBuffer, mediaType);
 		return {
 			matchedPieceId: null,
@@ -73,35 +72,21 @@ export async function matchImageToPieces(
 		};
 	}
 
-	const { data: base64Image } = await resizeForApi(imageBuffer);
-
-	const parts = buildMatchingParts(
-		base64Image,
-		depthMapBuffer ? depthMapBuffer.toString('base64') : null,
-		candidates.map((p) => ({
-			id: p.id,
-			name: p.name,
-			ai_description: p.ai_description,
-			depthBase64: p.depthMapBase64 ?? null,
-			coverBase64: p.coverImageBase64 ?? null
-		}))
-	);
+	const { base64: newBase64, depthBase64: newDepthBase64 } = await strategy.prepareNewImage(imageBuffer);
+	const candidates = await strategy.fetchCandidateImages(rawCandidates);
+	const parts = strategy.buildParts(newBase64, newDepthBase64, candidates);
 
 	console.log('[match] sending to Gemini:', {
-		candidates: candidates.map((p) => ({
-			id: p.id,
-			name: p.name,
-			hasDepthMap: !!p.depthMapBase64,
-			hasThumbnail: !!p.coverImageBase64
-		})),
-		newImageDepthMap: !!depthMapBuffer,
+		strategy: strategy.name,
+		candidates: candidates.map((c) => ({ id: c.id, name: c.name, hasImage: !!c.imageBase64 })),
+		hasNewDepthMap: !!newDepthBase64,
 		totalParts: parts.length
 	});
 
 	const response = await getClient().models.generateContent({
 		model: MATCH_MODEL,
 		config: {
-			systemInstruction: MATCH_SYSTEM_PROMPT,
+			systemInstruction: strategy.systemPrompt,
 			responseMimeType: 'application/json'
 		},
 		contents: [{ role: 'user', parts }]
@@ -115,7 +100,7 @@ export async function matchImageToPieces(
 
 	// Validate matchedPieceId is actually in our list
 	if (result.matchedPieceId) {
-		const exists = candidates.some((p) => p.id === result.matchedPieceId);
+		const exists = rawCandidates.some((c) => c.id === result.matchedPieceId);
 		if (!exists) {
 			console.error('[match] matchedPieceId not in candidate list — nulling');
 			result.matchedPieceId = null;

@@ -1,13 +1,13 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { matchImageToPieces, describeNewPiece, generateImageEmbedding } from '$lib/server/claude';
-import { generateDepthMap } from '$lib/server/depth';
 import { uploadImage } from '$lib/server/storage';
 import {
 	getExistingPiecesForMatching,
 	getPieceCoverUrls,
 	getCandidatesByEmbedding
 } from '$lib/server/pieces';
+import { getMatchingStrategy } from '$lib/server/strategies';
 import { randomUUID } from 'crypto';
 
 export const POST: RequestHandler = async ({ request, locals: { safeGetSession } }) => {
@@ -53,24 +53,16 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 			updatedDescription: description
 		};
 	} else {
-		// Generate embedding, description, and depth map in parallel
-		const depthMapResult = await generateDepthMap(buffer).catch((err) => {
-			console.error('[upload] depth map generation failed:', err);
-			return null;
-		});
-		diag.depthMapGenerated = depthMapResult !== null;
-
+		const strategy = getMatchingStrategy();
 		const [embedding, description] = await Promise.all([
 			generateImageEmbedding(buffer),
 			describeNewPiece(buffer, mediaType)
 		]);
 
-		// Find nearest candidates by embedding similarity, download their depth maps
 		const candidates = await getCandidatesByEmbedding(user.id, embedding);
 
+		diag.strategy = strategy.name;
 		diag.candidatesFound = candidates.length;
-		diag.candidatesWithDepthMap = candidates.filter((c) => c.depthMapBase64).length;
-		diag.candidatesWithThumbnail = candidates.filter((c) => c.coverImageBase64).length;
 		diag.candidateNames = candidates.map((c) => c.name);
 
 		console.log('[upload] diagnostics:', JSON.stringify(diag));
@@ -86,7 +78,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 			};
 		} else {
 			diag.step = 'gemini_comparison';
-			matchResult = await matchImageToPieces(buffer, mediaType, candidates, depthMapResult);
+			matchResult = await matchImageToPieces(buffer, mediaType, candidates, strategy);
 			if (!matchResult.updatedDescription) {
 				matchResult.updatedDescription = description;
 			}

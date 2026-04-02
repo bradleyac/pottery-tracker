@@ -300,8 +300,7 @@ Deno.serve(async (req: Request) => {
 			const matchCandidates: MatchCandidate[] = await Promise.all(
 				candidates.map(async (c) => {
 					const coverPath = c.cover_image_id ? coverPathMap.get(c.cover_image_id) : null;
-					let depthBase64: string | null = null;
-					let coverBase64: string | null = null;
+					let imageBase64: string | null = null;
 
 					if (coverPath) {
 						// Try depth map first
@@ -312,13 +311,13 @@ Deno.serve(async (req: Request) => {
 								.download(depthPath);
 							if (depthBlob) {
 								const depthBytes = await depthBlob.arrayBuffer();
-								depthBase64 = btoa(String.fromCharCode(...new Uint8Array(depthBytes)));
+								imageBase64 = btoa(String.fromCharCode(...new Uint8Array(depthBytes)));
 							}
 						} catch {
 							// No depth map — fall back to thumbnail
 						}
 
-						if (!depthBase64) {
+						if (!imageBase64) {
 							try {
 								const thumbPath = coverPath.replace(/\/([^/]+)\.jpg$/, '/thumb_$1.jpg');
 								const { data: thumbBlob } = await supabase.storage
@@ -326,7 +325,7 @@ Deno.serve(async (req: Request) => {
 									.download(thumbPath);
 								if (thumbBlob) {
 									const thumbBytes = await thumbBlob.arrayBuffer();
-									coverBase64 = btoa(String.fromCharCode(...new Uint8Array(thumbBytes)));
+									imageBase64 = btoa(String.fromCharCode(...new Uint8Array(thumbBytes)));
 								}
 							} catch {
 								// Skip image for this candidate
@@ -334,7 +333,7 @@ Deno.serve(async (req: Request) => {
 						}
 					}
 
-					return { id: c.id, name: c.name, ai_description: c.ai_description, depthBase64, coverBase64 };
+					return { id: c.id, name: c.name, ai_description: c.ai_description, imageBase64 };
 				})
 			);
 
