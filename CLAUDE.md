@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Branching
 
-**Always create a feature branch before making any code changes — no exceptions, including one-line fixes.**
+**Always create a feature branch before making any changes to the repository — no exceptions, including one-line fixes, adding scripts, or any other file additions.**
 
 ```bash
 git checkout -b fix/short-description   # or feature/short-description
