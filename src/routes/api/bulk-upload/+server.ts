@@ -2,7 +2,6 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { uploadImage } from '$lib/server/storage';
 import { createServiceRoleClient } from '$lib/server/supabase';
-import { generateDepthMap } from '$lib/server/depth';
 import { randomUUID } from 'crypto';
 import sharp from 'sharp';
 
@@ -38,21 +37,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 					.toBuffer();
 				const uuid = randomUUID();
 				const tempPath = `${user.id}/temp/${uuid}.jpg`;
-				const depthPath = `${user.id}/temp/depth_${uuid}.jpg`;
-				// Generate depth map and upload image in parallel, depth map must be
-				// stored before we insert the pending_uploads row so the edge function
-				// finds it immediately on trigger.
-				const [depthBuffer] = await Promise.allSettled([
-					generateDepthMap(buffer),
-					uploadImage(buffer, tempPath, 'image/jpeg')
-				]);
-				if (depthBuffer.status === 'fulfilled') {
-					await uploadImage(depthBuffer.value, depthPath, 'image/jpeg').catch((err) =>
-						console.error(`[bulk-upload] depth map upload failed for ${uuid}:`, err)
-					);
-				} else {
-					console.error(`[bulk-upload] depth map generation failed for ${uuid}:`, depthBuffer.reason);
-				}
+				await uploadImage(buffer, tempPath, 'image/jpeg');
 				return { ok: true as const, filename: file.name, tempPath };
 			} catch {
 				return { ok: false as const, filename: file.name, reason: 'Upload failed' };

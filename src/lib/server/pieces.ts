@@ -4,14 +4,12 @@ import {
 	deleteImage,
 	buildStoragePath,
 	buildThumbnailPath,
-	buildDepthMapPath,
 	buildCleanImagePath,
 	getSignedUrls,
 	downloadImage
 } from './storage';
 import { removeBackground } from './bgremove';
 import { describeNewPiece, resizeForApi, generateImageEmbedding } from './claude';
-import { generateDepthMap } from './depth';
 import type { ExistingPiece } from './claude';
 import type { RawCandidate } from './strategies';
 import { randomUUID } from 'crypto';
@@ -126,15 +124,6 @@ export async function createPieceFromTemp(
 		// Non-fatal — matching will work without thumbnail
 	}
 
-	// Store depth map for 3D profile matching (from clean image)
-	try {
-		const depthBuffer = await generateDepthMap(cleanBuffer);
-		const depthPath = buildDepthMapPath(userId, pieceId, imageId);
-		await uploadImage(depthBuffer, depthPath, 'image/jpeg');
-	} catch (err) {
-		console.error('Depth map generation failed (non-fatal):', err);
-	}
-
 	// Generate embedding for cover image (from clean image)
 	let embedding: number[] | null = null;
 	try {
@@ -243,14 +232,6 @@ export async function addImageToExistingPiece(
 		}
 
 		try {
-			const depthBuffer = await generateDepthMap(cleanBuffer);
-			const depthPath = buildDepthMapPath(userId, pieceId, imageId);
-			await uploadImage(depthBuffer, depthPath, 'image/jpeg');
-		} catch {
-			// Non-fatal
-		}
-
-		try {
 			const embedding = await generateImageEmbedding(cleanBuffer);
 			updates.cover_embedding = JSON.stringify(embedding);
 		} catch {
@@ -315,14 +296,6 @@ export async function addImageBufferToPiece(
 			const { data: thumbData, mimeType: thumbMime } = await resizeForApi(buffer);
 			const thumbPath = buildThumbnailPath(userId, pieceId, imageId);
 			await uploadImage(Buffer.from(thumbData, 'base64'), thumbPath, thumbMime);
-		} catch {
-			// Non-fatal
-		}
-
-		try {
-			const depthBuffer = await generateDepthMap(buffer);
-			const depthPath = buildDepthMapPath(userId, pieceId, imageId);
-			await uploadImage(depthBuffer, depthPath, 'image/jpeg');
 		} catch {
 			// Non-fatal
 		}
