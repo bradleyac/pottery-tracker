@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { matchImageToPieces, describeNewPiece, generateImageEmbedding } from '$lib/server/claude';
 import { uploadImage } from '$lib/server/storage';
 import { removeBackground } from '$lib/server/bgremove';
+import sharp from 'sharp';
 import {
 	getExistingPiecesForMatching,
 	getPieceCoverUrls,
@@ -26,16 +27,20 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 		error(400, 'Image must be under 10 MB');
 	}
 
-	const buffer = Buffer.from(await file.arrayBuffer());
-	const mediaType = (['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)
-		? file.type
-		: 'image/jpeg') as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
+	const rawBuffer = Buffer.from(await file.arrayBuffer());
+
+	// Resize to 512px (matching bulk-upload) so all stored images are consistently small
+	const buffer = await sharp(rawBuffer)
+		.rotate() // auto-orient from EXIF before resizing
+		.resize({ width: 512, height: 512, fit: 'inside', withoutEnlargement: true })
+		.jpeg({ quality: 82 })
+		.toBuffer();
 
 	// Upload to a temp path first (no piece assigned yet)
 	const tempId = randomUUID();
 	const tempPath = `${user.id}/temp/${tempId}.jpg`;
 
-	await uploadImage(buffer, tempPath, mediaType);
+	await uploadImage(buffer, tempPath, 'image/jpeg');
 
 	// Remove background for cleaner embedding and matching — fall back to original on failure
 	const cleanTempPath = `${user.id}/temp/clean_${tempId}.jpg`;
@@ -50,7 +55,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 
 	if (existingPieces.length === 0) {
 		diag.step = 'no_pieces';
-		const description = await describeNewPiece(buffer, mediaType);
+		const description = await describeNewPiece(buffer, 'image/jpeg');
 		matchResult = {
 			matchedPieceId: null,
 			confidence: 0,
@@ -62,7 +67,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 		const strategy = await getMatchingStrategy();
 		const [embedding, description] = await Promise.all([
 			generateImageEmbedding(cleanBuffer),
-			describeNewPiece(buffer, mediaType)
+			describeNewPiece(buffer, 'image/jpeg')
 		]);
 
 		const candidates = await getCandidatesByEmbedding(user.id, embedding);
