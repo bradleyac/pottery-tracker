@@ -93,7 +93,7 @@ export async function getSignedUrls(
 			.from('signed_url_cache')
 			.delete()
 			.lt('expires_at', new Date(now).toISOString())
-			.then(() => {});
+			.then(() => { });
 	}
 
 	return urlMap;
