@@ -66,6 +66,8 @@ Potters make many pieces of the same form. Two pieces can look nearly identical 
 
 GLAZE EFFECT ON SURFACE DETAIL: When glaze (whether wet/unfired or fired) has been applied to a piece, incised or carved patterns will appear shallower, less crisp, or partially filled in compared to the greenware stage. Do NOT treat reduced pattern depth or indistinct surface texture as evidence of a different piece — this is expected when comparing a glazed photo against a greenware candidate, or vice versa. Additionally, wet or unfired glaze can create transient surface texture artifacts — small circular indentations, bubbles, pinholes, cracks, brush marks, and uneven application texture — that disappear entirely or change significantly after firing. These are NOT permanent features of the piece. Do NOT treat them as distinguishing features or cite them as mismatch evidence.
 
+IDENTITY CARD RELIABILITY: The Identity Card for each candidate is auto-generated and may contain errors in decorative technique terminology — for example, a pattern that is truly incised (carved into the wall) may be described as "cut-out" or "pierced", and vice versa. Do NOT use terminology differences between the Identity Card and the new photo as evidence of a mismatch. The Identity Card is supplementary context only; base your match decision on the photos.
+
 STEP 1 — COMPARE SHAPES. For each candidate, compare the structural form of the new photo against the candidate:
 - What is the overall form type and proportions? (height-to-width ratio, silhouette)
 - What is the rim style? (flat, upturned, drooping, flared)
