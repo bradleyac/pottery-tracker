@@ -216,7 +216,7 @@ Deno.serve(async (req: Request) => {
 		const candidates: MatchPieceRow[] = matches ?? [];
 
 		const diag: Record<string, unknown> = {
-			strategy: strategyName,
+			strategy: strategy.name,
 			candidatesFound: candidates.length,
 			candidateNames: candidates.map((c) => c.name)
 		};
