@@ -11,6 +11,7 @@ export async function generateDepthMap(imageBuffer: Buffer): Promise<Buffer> {
 	const version = env.REPLICATE_DEPTH_MODEL ?? DEFAULT_DEPTH_VERSION;
 
 	const resized = await sharp(imageBuffer)
+		.rotate() // auto-orient from EXIF before resizing
 		.resize({ width: 512, height: 512, fit: 'inside', withoutEnlargement: true })
 		.jpeg({ quality: 82 })
 		.toBuffer();

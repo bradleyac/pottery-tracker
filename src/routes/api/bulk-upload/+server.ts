@@ -32,6 +32,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 				const rawBuffer = Buffer.from(await file.arrayBuffer());
 				// Resize to 512px so the Edge Function can pass it directly to Anthropic
 				const buffer = await sharp(rawBuffer)
+					.rotate() // auto-orient from EXIF before resizing so tall portraits aren't rotated by rembg
 					.resize({ width: 512, height: 512, fit: 'inside', withoutEnlargement: true })
 					.jpeg({ quality: 82 })
 					.toBuffer();

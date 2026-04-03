@@ -11,6 +11,7 @@ export async function removeBackground(buffer: Buffer): Promise<Buffer> {
 	const version = env.REPLICATE_BG_REMOVE_MODEL ?? DEFAULT_BG_REMOVE_VERSION;
 
 	const resized = await sharp(buffer)
+		.rotate() // auto-orient from EXIF before resizing so tall portraits aren't rotated by rembg
 		.resize({ width: 512, height: 512, fit: 'inside', withoutEnlargement: true })
 		.jpeg({ quality: 90 })
 		.toBuffer();

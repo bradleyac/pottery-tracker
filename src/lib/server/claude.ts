@@ -34,6 +34,7 @@ const EMBEDDING_MODEL = 'gemini-embedding-2-preview';
 // Originals are stored at full resolution; only the API payload is shrunk.
 export async function resizeForApi(buffer: Buffer): Promise<{ data: string; mimeType: 'image/jpeg' }> {
 	const resized = await sharp(buffer)
+		.rotate() // auto-orient from EXIF so portrait images aren't sent sideways
 		.resize({ width: 512, height: 512, fit: 'inside', withoutEnlargement: true })
 		.jpeg({ quality: 82 })
 		.toBuffer();
