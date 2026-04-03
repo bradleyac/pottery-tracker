@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { createServiceRoleClient } from '$lib/server/supabase';
-import { deleteImage } from '$lib/server/storage';
+import { deleteImage, deleteCachedUrls } from '$lib/server/storage';
 
 export const DELETE: RequestHandler = async ({ params, locals: { safeGetSession } }) => {
 	const { session, user } = await safeGetSession();
@@ -25,6 +25,7 @@ export const DELETE: RequestHandler = async ({ params, locals: { safeGetSession 
 	} catch {
 		// Non-fatal — continue to remove DB record
 	}
+	await deleteCachedUrls([image.storage_path]).catch(() => {});
 
 	// Delete DB row
 	const { error: deleteError } = await supabase

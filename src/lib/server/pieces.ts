@@ -2,6 +2,7 @@ import { createServiceRoleClient } from './supabase';
 import {
 	uploadImage,
 	deleteImage,
+	deleteCachedUrls,
 	buildStoragePath,
 	buildThumbnailPath,
 	buildCleanImagePath,
@@ -98,6 +99,7 @@ export async function createPieceFromTemp(
 		// ignore
 	}
 	await deleteImage(cleanTempPath).catch(() => {});
+	await deleteCachedUrls([tempPath, cleanTempPath]).catch(() => {});
 
 	let aiDescription = updatedDescription ?? null;
 	if (!aiDescription) {
@@ -199,6 +201,7 @@ export async function addImageToExistingPiece(
 		// Non-fatal
 	}
 	await deleteImage(cleanTempPath).catch(() => {});
+	await deleteCachedUrls([tempPath, cleanTempPath]).catch(() => {});
 
 	const isFirstImage = !piece.cover_image_id;
 	const { error: insertError } = await supabase.from('images').insert({

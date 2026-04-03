@@ -153,6 +153,12 @@ export interface Database {
 				};
 				Relationships: [];
 			};
+			signed_url_cache: {
+				Row:    { storage_path: string; signed_url: string; expires_at: string; cached_at: string };
+				Insert: { storage_path: string; signed_url: string; expires_at: string; cached_at?: string };
+				Update: { storage_path?: string; signed_url?: string; expires_at?: string; cached_at?: string };
+				Relationships: [];
+			};
 		};
 		Views: Record<string, never>;
 		Functions: Record<
