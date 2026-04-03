@@ -33,12 +33,44 @@
 		}
 	}
 
+	async function resizeImage(file: File): Promise<File> {
+		const img = new Image();
+		const url = URL.createObjectURL(file);
+		await new Promise<void>((resolve, reject) => {
+			img.onload = () => resolve();
+			img.onerror = () => reject(new Error(`Failed to load ${file.name}`));
+			img.src = url;
+		});
+		URL.revokeObjectURL(url);
+
+		const MAX = 512;
+		const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+		const w = Math.round(img.width * scale);
+		const h = Math.round(img.height * scale);
+
+		const canvas = document.createElement('canvas');
+		canvas.width = w;
+		canvas.height = h;
+		canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
+
+		const blob = await new Promise<Blob>((resolve, reject) =>
+			canvas.toBlob(
+				(b) => (b ? resolve(b) : reject(new Error('Canvas toBlob failed'))),
+				'image/jpeg',
+				0.82
+			)
+		);
+		const name = file.name.replace(/\.[^.]+$/, '.jpg');
+		return new File([blob], name, { type: 'image/jpeg' });
+	}
+
 	async function handleSingleFile(file: File) {
 		previewUrl = URL.createObjectURL(file);
 		step = 'uploading';
 
+		const resized = await resizeImage(file);
 		const formData = new FormData();
-		formData.append('image', file);
+		formData.append('image', resized);
 
 		let uploadResp: Response;
 		try {
@@ -84,8 +116,9 @@
 		bulkCount = files.length;
 		step = 'bulk_uploading';
 
+		const resized = await Promise.all(files.map(resizeImage));
 		const formData = new FormData();
-		for (const file of files) {
+		for (const file of resized) {
 			formData.append('images[]', file);
 		}
 
