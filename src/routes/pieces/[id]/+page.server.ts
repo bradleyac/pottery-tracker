@@ -21,7 +21,7 @@ export const load: PageServerLoad = async ({ params, locals: { safeGetSession } 
 
 	const { data: images, error: imagesError } = await supabase
 		.from('images')
-		.select('id, piece_id, user_id, storage_path, uploaded_at, notes, is_cover')
+		.select('id, piece_id, user_id, storage_path, uploaded_at, notes, is_cover, embedding')
 		.eq('piece_id', params.id)
 		.eq('user_id', user.id)
 		.order('uploaded_at', { ascending: true });
@@ -39,6 +39,7 @@ export const load: PageServerLoad = async ({ params, locals: { safeGetSession } 
 		uploaded_at: img.uploaded_at,
 		notes: img.notes ?? null,
 		is_cover: img.is_cover,
+		embedding: img.embedding ?? null,
 		url: signedUrls.get(img.storage_path) ?? ''
 	}));
 

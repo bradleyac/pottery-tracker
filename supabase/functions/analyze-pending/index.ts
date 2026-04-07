@@ -302,7 +302,8 @@ Deno.serve(async (req: Request) => {
 				confidence: result.confidence,
 				claude_reasoning: result.reasoning,
 				suggested_name: result.suggestedName,
-				updated_description: result.updatedDescription
+				updated_description: result.updatedDescription,
+				embedding: JSON.stringify(embedding)
 			})
 			.eq('id', uploadId);
 

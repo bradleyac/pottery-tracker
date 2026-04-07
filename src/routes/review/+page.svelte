@@ -2,15 +2,17 @@
 	import type { PageData } from './$types';
 	import { invalidate } from '$app/navigation';
 	import PendingUploadCard from '$lib/components/PendingUploadCard.svelte';
+	import BatchGroupCard from '$lib/components/BatchGroupCard.svelte';
 	import type { CardDecision } from '$lib/components/PendingUploadCard.svelte';
+	import type { GroupDecision } from '$lib/components/BatchGroupCard.svelte';
 	import type { PendingUploadWithUrls } from '$lib/types';
 
 	let { data } = $props<{ data: PageData }>();
 
-	// Local decisions per upload id
+	// Local decisions per upload id (individual) or group id (batch groups)
 	let decisions = $state<Map<string, CardDecision>>(new Map());
+	let groupDecisions = $state<Map<string, GroupDecision>>(new Map());
 
-	// Derive visible uploads (not dismissed/saved)
 	const uploads = $derived(data.pendingUploads);
 	const hasQueued = $derived(uploads.some((u: PendingUploadWithUrls) => u.status === 'queued'));
 
@@ -20,7 +22,6 @@
 	$effect(() => {
 		if (!hasQueued) return;
 		const timer = setInterval(async () => {
-			// Fire-and-forget retry for any stuck upload not yet retried this session
 			for (const upload of uploads) {
 				if (upload.isStuck && !retriedIds.has(upload.id)) {
 					retriedIds = new Set([...retriedIds, upload.id]);
@@ -32,6 +33,52 @@
 		return () => clearInterval(timer);
 	});
 
+	// Split uploads into groups and individuals.
+	// A group needs 2+ ready members sharing a batch_group_id.
+	type ReviewItem =
+		| { kind: 'group'; groupId: string; members: PendingUploadWithUrls[] }
+		| { kind: 'individual'; upload: PendingUploadWithUrls };
+
+	const reviewItems = $derived.by<ReviewItem[]>(() => {
+		const dismissed = new Set(
+			[...decisions.entries()]
+				.filter(([, d]) => d.mode === 'dismissed')
+				.map(([id]) => id)
+		);
+		const savedGroups = new Set(
+			[...groupDecisions.entries()]
+				.filter(([, d]) => d.mode === 'saved')
+				.map(([id]) => id)
+		);
+
+		// Gather group members (ready, not individually dismissed)
+		const groupMap = new Map<string, PendingUploadWithUrls[]>();
+		for (const u of uploads) {
+			if (u.batch_group_id && u.status === 'ready' && !dismissed.has(u.id)) {
+				if (!groupMap.has(u.batch_group_id)) groupMap.set(u.batch_group_id, []);
+				groupMap.get(u.batch_group_id)!.push(u);
+			}
+		}
+
+		const items: ReviewItem[] = [];
+		const groupedUploadIds = new Set<string>();
+
+		for (const [groupId, members] of groupMap) {
+			if (members.length < 2 || savedGroups.has(groupId)) continue;
+			for (const m of members) groupedUploadIds.add(m.id);
+			items.push({ kind: 'group', groupId, members });
+		}
+
+		// Remaining uploads rendered individually
+		for (const u of uploads) {
+			if (groupedUploadIds.has(u.id)) continue;
+			if (dismissed.has(u.id)) continue;
+			items.push({ kind: 'individual', upload: u });
+		}
+
+		return items;
+	});
+
 	function getDecision(id: string): CardDecision {
 		return decisions.get(id) ?? { mode: 'review' };
 	}
@@ -40,6 +87,16 @@
 		const next = new Map(decisions);
 		next.set(id, d);
 		decisions = next;
+	}
+
+	function getGroupDecision(groupId: string): GroupDecision {
+		return groupDecisions.get(groupId) ?? { mode: 'review' };
+	}
+
+	function setGroupDecision(groupId: string, d: GroupDecision) {
+		const next = new Map(groupDecisions);
+		next.set(groupId, d);
+		groupDecisions = next;
 	}
 
 	async function handleConfirm(
@@ -62,11 +119,44 @@
 			}
 			const { pieceId: savedPieceId } = await resp.json();
 			setDecision(upload.id, { mode: 'saved', pieceId: savedPieceId });
-			// Refresh layout badge count
 			await invalidate('app:review');
 		} catch {
 			setDecision(upload.id, { mode: 'error', message: 'Network error. Please try again.' });
 		}
+	}
+
+	async function handleGroupConfirm(
+		groupId: string,
+		action: 'to_piece' | 'new_piece',
+		pieceId?: string,
+		newPieceName?: string
+	) {
+		try {
+			const resp = await fetch(`/api/batch-groups/${groupId}/confirm`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ action, pieceId, newPieceName })
+			});
+			if (!resp.ok) {
+				const txt = await resp.text().catch(() => '');
+				setGroupDecision(groupId, { mode: 'error', message: txt || 'Failed to save' });
+				return;
+			}
+			const { pieceId: savedPieceId } = await resp.json();
+			setGroupDecision(groupId, { mode: 'saved', pieceId: savedPieceId });
+			await invalidate('app:review');
+		} catch {
+			setGroupDecision(groupId, { mode: 'error', message: 'Network error. Please try again.' });
+		}
+	}
+
+	async function handleSeparate(uploadId: string) {
+		await fetch(`/api/pending-uploads/${uploadId}`, {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ separateFromGroup: true })
+		});
+		await invalidate('app:review');
 	}
 
 	async function handleRetry(upload: PendingUploadWithUrls) {
@@ -85,17 +175,11 @@
 		}
 	}
 
-	const visibleUploads = $derived(
-		uploads.filter((u: PendingUploadWithUrls) => {
-			const d = getDecision(u.id);
-			return d.mode !== 'dismissed';
-		})
-	);
-
 	const pendingCount = $derived(
-		visibleUploads.filter((u: PendingUploadWithUrls) => {
-			const d = getDecision(u.id);
-			return d.mode === 'review' && u.status === 'ready';
+		reviewItems.filter((item) => {
+			if (item.kind === 'group') return getGroupDecision(item.groupId).mode === 'review';
+			const d = getDecision(item.upload.id);
+			return d.mode === 'review' && item.upload.status === 'ready';
 		}).length
 	);
 </script>
@@ -115,7 +199,7 @@
 		<a href="/upload" class="btn-upload">+ Upload more</a>
 	</div>
 
-	{#if visibleUploads.length === 0}
+	{#if reviewItems.length === 0}
 		<div class="empty-state">
 			<span class="empty-icon">✓</span>
 			<h2>All caught up!</h2>
@@ -127,16 +211,28 @@
 		</div>
 	{:else}
 		<div class="cards-list">
-			{#each visibleUploads as upload (upload.id)}
-				<PendingUploadCard
-					{upload}
-					pieces={data.pieces}
-					decision={getDecision(upload.id)}
-					onDecisionChange={(d) => setDecision(upload.id, d)}
-					onConfirm={(action, notes, pid, name) => handleConfirm(upload, action, notes, pid, name)}
-					onDismiss={() => handleDismiss(upload)}
-				onRetry={() => handleRetry(upload)}
-				/>
+			{#each reviewItems as item (item.kind === 'group' ? item.groupId : item.upload.id)}
+				{#if item.kind === 'group'}
+					<BatchGroupCard
+						uploads={item.members}
+						pieces={data.pieces}
+						decision={getGroupDecision(item.groupId)}
+						onDecisionChange={(d) => setGroupDecision(item.groupId, d)}
+						onConfirm={(action, pid, name) => handleGroupConfirm(item.groupId, action, pid, name)}
+						onSeparate={handleSeparate}
+					/>
+				{:else}
+					<PendingUploadCard
+						upload={item.upload}
+						pieces={data.pieces}
+						decision={getDecision(item.upload.id)}
+						onDecisionChange={(d) => setDecision(item.upload.id, d)}
+						onConfirm={(action, notes, pid, name) =>
+							handleConfirm(item.upload, action, notes, pid, name)}
+						onDismiss={() => handleDismiss(item.upload)}
+						onRetry={() => handleRetry(item.upload)}
+					/>
+				{/if}
 			{/each}
 		</div>
 	{/if}
