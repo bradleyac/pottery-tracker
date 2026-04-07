@@ -13,6 +13,7 @@ const mockImages: ImageWithUrl[] = [
 		uploaded_at: '2025-11-01T10:00:00Z',
 		notes: null,
 		is_cover: true,
+		embedding: null,
 		url: 'https://picsum.photos/seed/pot1/400/400'
 	},
 	{
@@ -23,6 +24,7 @@ const mockImages: ImageWithUrl[] = [
 		uploaded_at: '2025-11-15T14:30:00Z',
 		notes: 'After first firing',
 		is_cover: false,
+		embedding: null,
 		url: 'https://picsum.photos/seed/pot2/400/400'
 	},
 	{
@@ -33,6 +35,7 @@ const mockImages: ImageWithUrl[] = [
 		uploaded_at: '2025-12-01T09:15:00Z',
 		notes: 'Glazed and finished',
 		is_cover: false,
+		embedding: null,
 		url: 'https://picsum.photos/seed/pot3/400/400'
 	}
 ];

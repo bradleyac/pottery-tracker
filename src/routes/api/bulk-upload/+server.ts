@@ -48,13 +48,16 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 	const succeeded = uploadResults.filter((r) => r.ok);
 	if (succeeded.length === 0) error(500, 'All uploads failed');
 
-	// Batch-insert pending_uploads rows
+	// Batch-insert pending_uploads rows — all share a batch_id so Phase 2
+	// consolidation can find them together on the review page.
 	const supabase = createServiceRoleClient();
+	const batchId = randomUUID();
 	const rows = succeeded.map((r) => ({
 		user_id: user.id,
 		temp_storage_path: r.tempPath!,
 		original_filename: r.filename,
-		status: 'queued' as const
+		status: 'queued' as const,
+		batch_id: batchId
 	}));
 
 	const { error: insertError } = await supabase.from('pending_uploads').insert(rows);

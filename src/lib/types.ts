@@ -48,6 +48,7 @@ export interface Database {
 					uploaded_at: string;
 					notes: string | null;
 					is_cover: boolean;
+					embedding: string | null;
 				};
 				Insert: {
 					id?: string;
@@ -57,6 +58,7 @@ export interface Database {
 					uploaded_at?: string;
 					notes?: string | null;
 					is_cover?: boolean;
+					embedding?: string | null;
 				};
 				Update: {
 					id?: string;
@@ -66,6 +68,7 @@ export interface Database {
 					uploaded_at?: string;
 					notes?: string | null;
 					is_cover?: boolean;
+					embedding?: string | null;
 				};
 				Relationships: [];
 			};
@@ -124,6 +127,10 @@ export interface Database {
 					updated_description: string | null;
 					status: 'queued' | 'ready' | 'failed';
 					created_at: string;
+					batch_id: string | null;
+					embedding: string | null;
+					batch_group_id: string | null;
+					batch_consolidated: boolean;
 				};
 				Insert: {
 					id?: string;
@@ -137,6 +144,10 @@ export interface Database {
 					updated_description?: string | null;
 					status?: 'queued' | 'ready' | 'failed';
 					created_at?: string;
+					batch_id?: string | null;
+					embedding?: string | null;
+					batch_group_id?: string | null;
+					batch_consolidated?: boolean;
 				};
 				Update: {
 					id?: string;
@@ -150,6 +161,10 @@ export interface Database {
 					updated_description?: string | null;
 					status?: 'queued' | 'ready' | 'failed';
 					created_at?: string;
+					batch_id?: string | null;
+					embedding?: string | null;
+					batch_group_id?: string | null;
+					batch_consolidated?: boolean;
 				};
 				Relationships: [];
 			};

@@ -2,6 +2,7 @@ import type { PageServerLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
 import { createServiceRoleClient } from '$lib/server/supabase';
 import { getSignedUrls } from '$lib/server/storage';
+import { consolidateBatch } from '$lib/server/batch';
 import type { PendingUploadWithUrls, PieceSummary } from '$lib/types';
 
 export const load: PageServerLoad = async ({ locals: { safeGetSession }, depends }) => {
@@ -20,6 +21,37 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession }, depends
 
 	if (!uploads || uploads.length === 0) {
 		return { pendingUploads: [] as PendingUploadWithUrls[], pieces: [] as PieceSummary[] };
+	}
+
+	// Find complete, unconsolidated batches and run Phase 2 grouping.
+	// A batch is complete when all its members are ready or failed (none queued).
+	const batchIds = [...new Set(uploads.map((u) => u.batch_id).filter(Boolean))] as string[];
+	if (batchIds.length > 0) {
+		const incompleteBatchIds = new Set(
+			uploads.filter((u) => u.status === 'queued' && u.batch_id).map((u) => u.batch_id as string)
+		);
+		const unconsolidatedBatchIds = batchIds.filter(
+			(id) =>
+				!incompleteBatchIds.has(id) &&
+				uploads.some((u) => u.batch_id === id && !u.batch_consolidated)
+		);
+		// Run consolidations sequentially — each makes Gemini calls
+		for (const batchId of unconsolidatedBatchIds) {
+			try {
+				await consolidateBatch(batchId);
+			} catch (err) {
+				console.error(`[review] consolidateBatch failed for ${batchId}:`, err);
+			}
+		}
+		// Re-fetch uploads if any consolidation ran, so group assignments are reflected
+		if (unconsolidatedBatchIds.length > 0) {
+			const { data: refreshed } = await supabase
+				.from('pending_uploads')
+				.select('*')
+				.eq('user_id', user.id)
+				.order('created_at', { ascending: true });
+			if (refreshed) uploads.splice(0, uploads.length, ...refreshed);
+		}
 	}
 
 	// Collect all storage paths to sign
