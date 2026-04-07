@@ -3,6 +3,8 @@ import type { RequestHandler } from './$types';
 import { createServiceRoleClient } from '$lib/server/supabase';
 import { createPieceFromTemp, addImageToExistingPiece } from '$lib/server/pieces';
 
+export const config = { maxDuration: 300 };
+
 export const POST: RequestHandler = async ({ request, params, locals: { safeGetSession } }) => {
 	const { session, user } = await safeGetSession();
 	if (!session || !user) error(401, 'Unauthorized');
@@ -44,18 +46,22 @@ export const POST: RequestHandler = async ({ request, params, locals: { safeGetS
 			);
 			pieceId = result.pieceId;
 
-			// Remaining uploads added sequentially (addImageToExistingPiece is safe to parallelize
-			// after the cover is set, but sequential keeps ordering predictable)
-			for (const upload of rest) {
-				await addImageToExistingPiece(user.id, pieceId, upload.temp_storage_path, null, null);
-			}
+			// Remaining uploads are independent once the cover is set — run in parallel
+			await Promise.all(
+				rest.map((upload) =>
+					addImageToExistingPiece(user.id, pieceId, upload.temp_storage_path, null, null)
+				)
+			);
 		} else if (body.action === 'to_piece') {
 			if (!body.pieceId) error(400, 'pieceId is required');
 			pieceId = body.pieceId!;
 
-			for (const upload of uploads) {
-				await addImageToExistingPiece(user.id, pieceId, upload.temp_storage_path, null, null);
-			}
+			// All parallel — piece already exists with a cover
+			await Promise.all(
+				uploads.map((upload) =>
+					addImageToExistingPiece(user.id, pieceId, upload.temp_storage_path, null, null)
+				)
+			);
 		} else {
 			error(400, 'Invalid action');
 		}
