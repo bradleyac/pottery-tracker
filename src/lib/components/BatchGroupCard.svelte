@@ -56,9 +56,10 @@
 
 	async function handleCreateNew() {
 		if (decision.mode !== 'new_piece') return;
-		if (!decision.name.trim()) return;
+		const name = decision.name.trim();
+		if (!name) return;
 		onDecisionChange({ mode: 'saving' });
-		await onConfirm('new_piece', undefined, decision.name.trim());
+		await onConfirm('new_piece', undefined, name);
 	}
 
 	async function handleOverride() {
