@@ -64,6 +64,17 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession }, depends
 
 		for (const batchId of fallbackBatchIds) {
 			try {
+				// Atomic claim — mirrors edge function pattern (analyze-pending/index.ts)
+				// to prevent two overlapping page loads from both running consolidateBatch.
+				const { data: claimed } = await supabase
+					.from('pending_uploads')
+					.update({ batch_consolidated: true })
+					.eq('batch_id', batchId)
+					.eq('batch_consolidated', false)
+					.select('id');
+
+				if (!claimed || claimed.length === 0) continue; // lost the race; another load claimed it
+
 				await consolidateBatch(batchId);
 			} catch (err) {
 				console.error(`[review] consolidateBatch fallback failed for ${batchId}:`, err);
