@@ -3,9 +3,18 @@
 	import { invalidate } from '$app/navigation';
 	import PendingUploadCard from '$lib/components/PendingUploadCard.svelte';
 	import BatchGroupCard from '$lib/components/BatchGroupCard.svelte';
+	import BatchProgressCard from '$lib/components/BatchProgressCard.svelte';
 	import type { CardDecision } from '$lib/components/PendingUploadCard.svelte';
 	import type { GroupDecision } from '$lib/components/BatchGroupCard.svelte';
-	import type { PendingUploadWithUrls } from '$lib/types';
+	import type { PendingUploadWithUrls, PendingBatch, PendingUploadStatus } from '$lib/types';
+
+	const IN_PROGRESS_STATUSES: PendingUploadStatus[] = [
+		'queued',
+		'preprocessing',
+		'analyzing',
+		'waiting_for_batch',
+		'consolidating'
+	];
 
 	let { data } = $props<{ data: PageData }>();
 
@@ -14,7 +23,12 @@
 	let groupDecisions = $state<Map<string, GroupDecision>>(new Map());
 
 	const uploads = $derived(data.pendingUploads);
-	const hasQueued = $derived(uploads.some((u: PendingUploadWithUrls) => u.status === 'queued'));
+	const hasQueued = $derived(
+		data.pendingBatches.length > 0 ||
+			uploads.some((u: PendingUploadWithUrls) =>
+				IN_PROGRESS_STATUSES.includes(u.status as PendingUploadStatus)
+			)
+	);
 
 	let retriedIds = $state(new Set<string>());
 
@@ -33,11 +47,12 @@
 		return () => clearInterval(timer);
 	});
 
-	// Split uploads into groups and individuals.
+	// Split uploads into groups, individuals, and in-flight batch cards.
 	// A group needs 2+ ready members sharing a batch_group_id.
 	type ReviewItem =
 		| { kind: 'group'; groupId: string; members: PendingUploadWithUrls[] }
-		| { kind: 'individual'; upload: PendingUploadWithUrls };
+		| { kind: 'individual'; upload: PendingUploadWithUrls }
+		| { kind: 'pending_batch'; batch: PendingBatch };
 
 	const reviewItems = $derived.by<ReviewItem[]>(() => {
 		const dismissed = new Set(
@@ -51,6 +66,13 @@
 				.map(([id]) => id)
 		);
 
+		const items: ReviewItem[] = [];
+
+		// Pending batch progress cards come first
+		for (const batch of data.pendingBatches) {
+			items.push({ kind: 'pending_batch', batch });
+		}
+
 		// Gather group members (ready, not individually dismissed)
 		const groupMap = new Map<string, PendingUploadWithUrls[]>();
 		for (const u of uploads) {
@@ -60,7 +82,6 @@
 			}
 		}
 
-		const items: ReviewItem[] = [];
 		const groupedUploadIds = new Set<string>();
 
 		for (const [groupId, members] of groupMap) {
@@ -177,6 +198,7 @@
 
 	const pendingCount = $derived(
 		reviewItems.filter((item) => {
+			if (item.kind === 'pending_batch') return false;
 			if (item.kind === 'group') return getGroupDecision(item.groupId).mode === 'review';
 			const d = getDecision(item.upload.id);
 			return d.mode === 'review' && item.upload.status === 'ready';
@@ -211,8 +233,10 @@
 		</div>
 	{:else}
 		<div class="cards-list">
-			{#each reviewItems as item (item.kind === 'group' ? item.groupId : item.upload.id)}
-				{#if item.kind === 'group'}
+			{#each reviewItems as item (item.kind === 'group' ? item.groupId : item.kind === 'pending_batch' ? item.batch.batchId : item.upload.id)}
+				{#if item.kind === 'pending_batch'}
+					<BatchProgressCard batch={item.batch} />
+				{:else if item.kind === 'group'}
 					<BatchGroupCard
 						uploads={item.members}
 						pieces={data.pieces}

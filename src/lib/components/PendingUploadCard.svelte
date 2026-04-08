@@ -52,21 +52,30 @@
 		await onConfirm('new_piece', notes, undefined, name);
 	}
 
-	$inspect(decision);
 </script>
 
 <div
 	class="card"
-	class:queued={upload.status === 'queued'}
+	class:queued={upload.status !== 'ready' && upload.status !== 'failed'}
 	class:failed={upload.status === 'failed'}
 >
-	{#if upload.status === 'queued'}
+	{#if upload.status === 'queued' || upload.status === 'preprocessing' || upload.status === 'analyzing' || upload.status === 'waiting_for_batch' || upload.status === 'consolidating'}
 		<div class="card-body skeleton-body">
 			<div class="skeleton-img"></div>
 			<div class="skeleton-text">
 				<div class="skeleton-line wide"></div>
 				<div class="skeleton-line narrow"></div>
-				<p class="analyzing-label">Analyzing with Claude…</p>
+				{#if upload.status === 'preprocessing'}
+					<p class="analyzing-label">Removing background…</p>
+				{:else if upload.status === 'analyzing'}
+					<p class="analyzing-label">Matching against your collection…</p>
+				{:else if upload.status === 'waiting_for_batch'}
+					<p class="analyzing-label">Waiting for batch to finish…</p>
+				{:else if upload.status === 'consolidating'}
+					<p class="analyzing-label">Grouping related photos…</p>
+				{:else}
+					<p class="analyzing-label">Waiting to start…</p>
+				{/if}
 			</div>
 		</div>
 	{:else if upload.status === 'failed'}

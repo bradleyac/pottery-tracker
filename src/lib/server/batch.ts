@@ -66,6 +66,13 @@ async function markBatchConsolidated(supabase: any, batchId: string) {
 		.from('pending_uploads')
 		.update({ batch_consolidated: true })
 		.eq('batch_id', batchId);
+
+	// Set consolidating/waiting_for_batch uploads to ready (not failed ones)
+	await supabase
+		.from('pending_uploads')
+		.update({ status: 'ready' })
+		.eq('batch_id', batchId)
+		.in('status', ['consolidating', 'waiting_for_batch']);
 }
 
 type BatchUpload = {
@@ -82,7 +89,7 @@ export async function consolidateBatch(batchId: string): Promise<void> {
 		.from('pending_uploads')
 		.select('id, temp_storage_path, matched_piece_id, embedding')
 		.eq('batch_id', batchId)
-		.eq('status', 'ready')
+		.in('status', ['consolidating', 'waiting_for_batch', 'ready'])
 		.not('embedding', 'is', null);
 
 	if (error) throw new Error(`Failed to fetch batch uploads: ${error.message}`);

@@ -3,7 +3,25 @@ import { redirect } from '@sveltejs/kit';
 import { createServiceRoleClient } from '$lib/server/supabase';
 import { getSignedUrls } from '$lib/server/storage';
 import { consolidateBatch } from '$lib/server/batch';
-import type { PendingUploadWithUrls, PieceSummary } from '$lib/types';
+import type { PendingUploadWithUrls, PendingBatch, PendingUploadStatus, PieceSummary } from '$lib/types';
+
+const IN_PROGRESS_STATUSES: PendingUploadStatus[] = [
+	'queued',
+	'preprocessing',
+	'analyzing',
+	'waiting_for_batch',
+	'consolidating'
+];
+
+// Most "in-flight" status ordering — used to pick the representative status for a batch card
+const STATUS_ORDER: PendingUploadStatus[] = [
+	'consolidating',
+	'waiting_for_batch',
+	'analyzing',
+	'preprocessing',
+	'queued',
+	'failed'
+];
 
 export const load: PageServerLoad = async ({ locals: { safeGetSession }, depends }) => {
 	depends('app:review');
@@ -20,31 +38,40 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession }, depends
 		.order('created_at', { ascending: true });
 
 	if (!uploads || uploads.length === 0) {
-		return { pendingUploads: [] as PendingUploadWithUrls[], pieces: [] as PieceSummary[] };
+		return {
+			pendingUploads: [] as PendingUploadWithUrls[],
+			pendingBatches: [] as PendingBatch[],
+			pieces: [] as PieceSummary[]
+		};
 	}
 
-	// Find complete, unconsolidated batches and run Phase 2 grouping.
-	// A batch is complete when all its members are ready or failed (none queued).
 	const batchIds = [...new Set(uploads.map((u) => u.batch_id).filter(Boolean))] as string[];
+
+	// Fallback consolidation: fires for batches where all members are settled
+	// (ready|failed|waiting_for_batch), not yet consolidated, and oldest member > 30s old.
+	// Covers both the normal case and batches stuck when APP_URL is unset.
 	if (batchIds.length > 0) {
-		const incompleteBatchIds = new Set(
-			uploads.filter((u) => u.status === 'queued' && u.batch_id).map((u) => u.batch_id as string)
-		);
-		const unconsolidatedBatchIds = batchIds.filter(
-			(id) =>
-				!incompleteBatchIds.has(id) &&
-				uploads.some((u) => u.batch_id === id && !u.batch_consolidated)
-		);
-		// Run consolidations sequentially — each makes Gemini calls
-		for (const batchId of unconsolidatedBatchIds) {
+		const THIRTY_SECONDS = 30_000;
+		const fallbackBatchIds = batchIds.filter((id) => {
+			const members = uploads.filter((u) => u.batch_id === id);
+			const allSettled = members.every(
+				(u) => u.status === 'ready' || u.status === 'failed' || u.status === 'waiting_for_batch'
+			);
+			const notConsolidated = members.some((u) => !u.batch_consolidated);
+			const oldestMs = Math.min(...members.map((u) => new Date(u.created_at).getTime()));
+			return allSettled && notConsolidated && Date.now() - oldestMs > THIRTY_SECONDS;
+		});
+
+		for (const batchId of fallbackBatchIds) {
 			try {
 				await consolidateBatch(batchId);
 			} catch (err) {
-				console.error(`[review] consolidateBatch failed for ${batchId}:`, err);
+				console.error(`[review] consolidateBatch fallback failed for ${batchId}:`, err);
 			}
 		}
-		// Re-fetch uploads if any consolidation ran, so group assignments are reflected
-		if (unconsolidatedBatchIds.length > 0) {
+
+		// Re-fetch if any consolidation ran
+		if (fallbackBatchIds.length > 0) {
 			const { data: refreshed } = await supabase
 				.from('pending_uploads')
 				.select('*')
@@ -54,11 +81,41 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession }, depends
 		}
 	}
 
+	// Batches with at least one member still in-flight — shown as BatchProgressCard
+	const inProgressBatchIds = new Set(
+		uploads
+			.filter((u) => u.batch_id && IN_PROGRESS_STATUSES.includes(u.status as PendingUploadStatus))
+			.map((u) => u.batch_id as string)
+	);
+
+	// Build PendingBatch descriptors for the in-flight batches
+	const pendingBatches: PendingBatch[] = [...inProgressBatchIds].map((batchId) => {
+		const members = uploads.filter((u) => u.batch_id === batchId);
+		const statusCounts: Partial<Record<PendingUploadStatus, number>> = {};
+		for (const m of members) {
+			const s = m.status as PendingUploadStatus;
+			statusCounts[s] = (statusCounts[s] ?? 0) + 1;
+		}
+		const worstStatus =
+			STATUS_ORDER.find((s) => statusCounts[s] !== undefined) ?? 'queued';
+		return {
+			batchId,
+			uploadCount: members.length,
+			statusCounts,
+			worstStatus
+		};
+	});
+
+	// Exclude in-flight batch members from the visible upload list
+	const visibleUploads = uploads.filter(
+		(u) => !u.batch_id || !inProgressBatchIds.has(u.batch_id)
+	);
+
 	// Collect all storage paths to sign
-	const tempPaths = uploads.map((u) => u.temp_storage_path);
+	const tempPaths = visibleUploads.map((u) => u.temp_storage_path);
 
 	// Collect matched piece cover paths for 'ready' uploads
-	const matchedPieceIds = uploads
+	const matchedPieceIds = visibleUploads
 		.filter((u) => u.status === 'ready' && u.matched_piece_id)
 		.map((u) => u.matched_piece_id as string);
 
@@ -129,10 +186,10 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession }, depends
 	// Gather all paths to sign at once
 	const coverPathsToSign = [
 		...new Set([
-			...Array.from(pieceCoverPathMap.values()).filter(Boolean) as string[],
-			...(allPieces ?? [])
-				.map((p) => p.cover_image_id ? (allCoverPathMap.get(p.cover_image_id) ?? null) : null)
-				.filter(Boolean) as string[]
+			...(Array.from(pieceCoverPathMap.values()).filter(Boolean) as string[]),
+			...((allPieces ?? [])
+				.map((p) => (p.cover_image_id ? (allCoverPathMap.get(p.cover_image_id) ?? null) : null))
+				.filter(Boolean) as string[])
 		])
 	];
 
@@ -147,10 +204,10 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession }, depends
 		}
 	}
 
-	const TWO_MINUTES_MS = 2 * 60 * 1000;
+	const FIVE_MINUTES_MS = 5 * 60 * 1000;
 	const now = Date.now();
 
-	const pendingUploads: PendingUploadWithUrls[] = uploads.map((u) => {
+	const pendingUploads: PendingUploadWithUrls[] = visibleUploads.map((u) => {
 		const coverPath = u.matched_piece_id
 			? (pieceCoverPathMap.get(u.matched_piece_id) ?? null)
 			: null;
@@ -159,7 +216,9 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession }, depends
 			tempImageUrl: signedUrlMap.get(u.temp_storage_path) ?? '',
 			matchedPieceCoverUrl: coverPath ? (signedUrlMap.get(coverPath) ?? null) : null,
 			matchedPieceName: u.matched_piece_id ? (pieceNameMap.get(u.matched_piece_id) ?? null) : null,
-			isStuck: u.status === 'queued' && (now - new Date(u.created_at).getTime()) > TWO_MINUTES_MS
+			isStuck:
+				IN_PROGRESS_STATUSES.includes(u.status as PendingUploadStatus) &&
+				now - new Date(u.created_at).getTime() > FIVE_MINUTES_MS
 		};
 	});
 
@@ -172,5 +231,5 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession }, depends
 		};
 	});
 
-	return { pendingUploads, pieces };
+	return { pendingUploads, pendingBatches, pieces };
 };
