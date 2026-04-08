@@ -15,12 +15,12 @@
 		<div class="nav-links">
 			<a href="/" class="nav-link">My Pieces</a>
 			<a href="/upload" class="nav-link upload-btn">+ Upload Photo</a>
-			{#if pendingCount > 0}
-				<a href="/review" class="nav-link review-link">
-					Review
+			<a href="/review" class="nav-link review-link">
+				Review
+				{#if pendingCount > 0}
 					<span class="review-badge">{pendingCount}</span>
-				</a>
-			{/if}
+				{/if}
+			</a>
 		</div>
 
 		<div class="nav-user">
