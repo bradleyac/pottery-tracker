@@ -18,16 +18,18 @@ export const POST: RequestHandler = async ({ request, params, locals: { safeGetS
 
 	const supabase = createServiceRoleClient();
 
-	// Fetch all ready uploads in this group owned by the user
+	// Fetch all uploads in this group owned by the user (status filter removed — group may be consolidating)
 	const { data: uploads, error: fetchError } = await supabase
 		.from('pending_uploads')
 		.select('*')
 		.eq('batch_group_id', groupId)
 		.eq('user_id', user.id)
-		.eq('status', 'ready')
 		.order('created_at', { ascending: true });
 
 	if (fetchError || !uploads || uploads.length === 0) error(404, 'Group not found');
+
+	const readyUploads = uploads.filter((u) => u.status === 'ready');
+	if (readyUploads.length === 0) error(409, 'Group is still being processed');
 
 	let pieceId: string;
 
@@ -36,7 +38,7 @@ export const POST: RequestHandler = async ({ request, params, locals: { safeGetS
 			if (!body.newPieceName?.trim()) error(400, 'newPieceName is required');
 
 			// First upload creates the piece (becomes the cover)
-			const [first, ...rest] = uploads;
+			const [first, ...rest] = readyUploads;
 			const result = await createPieceFromTemp(
 				user.id,
 				first.temp_storage_path,
@@ -58,7 +60,7 @@ export const POST: RequestHandler = async ({ request, params, locals: { safeGetS
 
 			// All parallel — piece already exists with a cover
 			await Promise.all(
-				uploads.map((upload) =>
+				readyUploads.map((upload) =>
 					addImageToExistingPiece(user.id, pieceId, upload.temp_storage_path, null, null)
 				)
 			);
@@ -72,7 +74,7 @@ export const POST: RequestHandler = async ({ request, params, locals: { safeGetS
 
 	// Audit rows for each upload
 	await supabase.from('piece_matches').insert(
-		uploads.map((u) => ({
+		readyUploads.map((u) => ({
 			user_id: user.id,
 			candidate_path: u.temp_storage_path,
 			suggested_piece_id: u.matched_piece_id,

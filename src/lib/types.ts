@@ -125,7 +125,7 @@ export interface Database {
 					claude_reasoning: string | null;
 					suggested_name: string | null;
 					updated_description: string | null;
-					status: 'queued' | 'ready' | 'failed';
+					status: PendingUploadStatus;
 					created_at: string;
 					batch_id: string | null;
 					embedding: string | null;
@@ -142,7 +142,7 @@ export interface Database {
 					claude_reasoning?: string | null;
 					suggested_name?: string | null;
 					updated_description?: string | null;
-					status?: 'queued' | 'ready' | 'failed';
+					status?: PendingUploadStatus;
 					created_at?: string;
 					batch_id?: string | null;
 					embedding?: string | null;
@@ -159,7 +159,7 @@ export interface Database {
 					claude_reasoning?: string | null;
 					suggested_name?: string | null;
 					updated_description?: string | null;
-					status?: 'queued' | 'ready' | 'failed';
+					status?: PendingUploadStatus;
 					created_at?: string;
 					batch_id?: string | null;
 					embedding?: string | null;
@@ -186,6 +186,22 @@ export interface Database {
 		Enums: Record<string, string[]>;
 	};
 }
+
+export type PendingUploadStatus =
+	| 'queued'
+	| 'preprocessing'
+	| 'analyzing'
+	| 'waiting_for_batch'
+	| 'consolidating'
+	| 'ready'
+	| 'failed';
+
+export type PendingBatch = {
+	batchId: string;
+	uploadCount: number;
+	statusCounts: Partial<Record<PendingUploadStatus, number>>;
+	worstStatus: PendingUploadStatus;
+};
 
 // Convenience types
 export type Piece = Database['public']['Tables']['pieces']['Row'];

@@ -19,6 +19,7 @@ interface PendingUploadRecord {
 	id: string;
 	user_id: string;
 	temp_storage_path: string;
+	batch_id: string | null;
 }
 
 interface WebhookPayload {
@@ -143,6 +144,7 @@ Deno.serve(async (req: Request) => {
 	const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 	const geminiKey = Deno.env.get('GEMINI_API_KEY')!;
 	const replicateToken = Deno.env.get('REPLICATE_API_TOKEN') ?? '';
+	const appUrl = Deno.env.get('APP_URL') ?? '';
 
 	const supabase = createClient(supabaseUrl, serviceRoleKey);
 
@@ -157,7 +159,11 @@ Deno.serve(async (req: Request) => {
 		return new Response('Not an INSERT event', { status: 200 });
 	}
 
-	const { id: uploadId, user_id: userId, temp_storage_path: tempPath } = payload.record;
+	const { id: uploadId, user_id: userId, temp_storage_path: tempPath, batch_id: batchId } = payload.record;
+
+	async function setStatus(uploadId: string, status: string) {
+		await supabase.from('pending_uploads').update({ status }).eq('id', uploadId);
+	}
 
 	try {
 		// Download the temp image (pre-resized to 512px by the bulk-upload route)
@@ -172,6 +178,7 @@ Deno.serve(async (req: Request) => {
 		// Remove background for cleaner embedding and matching — non-fatal, store clean temp
 		let cleanImageBase64 = imageBase64;
 		if (replicateToken) {
+			await setStatus(uploadId, 'preprocessing');
 			try {
 				cleanImageBase64 = await removeBackgroundDeno(replicateToken, imageBase64);
 				const cleanTempPath = tempPath.replace(/([^/]+\.jpg)$/, 'clean_$1');
@@ -186,6 +193,8 @@ Deno.serve(async (req: Request) => {
 				cleanImageBase64 = imageBase64;
 			}
 		}
+
+		await setStatus(uploadId, 'analyzing');
 
 		// Build Deno IO adapter
 		const denoIO: StrategyIO = {
@@ -294,10 +303,11 @@ Deno.serve(async (req: Request) => {
 		}
 
 		// Update pending_uploads row with results
+		const finalStatus = batchId ? 'waiting_for_batch' : 'ready';
 		await supabase
 			.from('pending_uploads')
 			.update({
-				status: 'ready',
+				status: finalStatus,
 				matched_piece_id: result.matchedPieceId,
 				confidence: result.confidence,
 				claude_reasoning: result.reasoning,
@@ -306,6 +316,52 @@ Deno.serve(async (req: Request) => {
 				embedding: JSON.stringify(embedding)
 			})
 			.eq('id', uploadId);
+
+		// For batch uploads: check if all siblings are done and trigger consolidation
+		if (batchId) {
+			const { data: batchMembers } = await supabase
+				.from('pending_uploads')
+				.select('id, status, batch_consolidated')
+				.eq('batch_id', batchId);
+
+			const allDone = batchMembers?.every((r: { status: string }) =>
+				r.status === 'waiting_for_batch' || r.status === 'failed'
+			) ?? false;
+			const alreadyConsolidated = batchMembers?.some((r: { batch_consolidated: boolean }) =>
+				r.batch_consolidated
+			) ?? false;
+
+			if (allDone && !alreadyConsolidated) {
+				// Atomic claim — only the winning concurrent invocation proceeds
+				const { data: claimed } = await supabase
+					.from('pending_uploads')
+					.update({ batch_consolidated: true })
+					.eq('batch_id', batchId)
+					.eq('batch_consolidated', false)
+					.select('id');
+
+				if (claimed && claimed.length > 0) {
+					await supabase
+						.from('pending_uploads')
+						.update({ status: 'consolidating' })
+						.eq('batch_id', batchId)
+						.in('status', ['waiting_for_batch']);
+
+					if (appUrl) {
+						fetch(`${appUrl}/api/internal/consolidate`, {
+							method: 'POST',
+							headers: {
+								'Content-Type': 'application/json',
+								'Authorization': `Bearer ${serviceRoleKey}`
+							},
+							body: JSON.stringify({ batchId })
+						}).catch((err: unknown) =>
+							console.error('[analyze-pending] consolidate trigger failed:', err)
+						);
+					}
+				}
+			}
+		}
 
 		return new Response(JSON.stringify({ ok: true }), {
 			headers: { 'Content-Type': 'application/json' }
