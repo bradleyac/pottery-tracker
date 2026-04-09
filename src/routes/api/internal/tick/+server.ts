@@ -52,6 +52,8 @@ export const POST: RequestHandler = async ({ request }) => {
 		.lt('analyze_attempts', MAX_ANALYZE_ATTEMPTS)
 		.limit(TICK_LIMIT);
 
+	const triggerPromises: Promise<void>[] = [];
+
 	if (eligibleRows && eligibleRows.length > 0) {
 		for (const row of eligibleRows) {
 			// Atomically claim the row — only the winner proceeds
@@ -65,16 +67,26 @@ export const POST: RequestHandler = async ({ request }) => {
 
 			if (!claimed) continue; // lost the race
 
-			// Fire the edge function without awaiting — it will clear the lease on completion
-			fetch(edgeFunctionUrl, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${serviceKey}`
-				},
-				body: JSON.stringify({ uploadId: row.id })
-			}).catch((err: unknown) =>
-				console.error(`[tick] analyze-pending trigger failed for ${row.id}:`, err)
+			// Collect trigger promises — awaited below before returning so Vercel
+			// doesn't freeze the process (and drop the outgoing request) after
+			// the response is sent.
+			triggerPromises.push(
+				fetch(edgeFunctionUrl, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						Authorization: `Bearer ${serviceKey}`
+					},
+					body: JSON.stringify({ uploadId: row.id }),
+					signal: AbortSignal.timeout(90_000)
+				})
+					.then((r) => {
+						if (!r.ok)
+							console.error(`[tick] edge function returned ${r.status} for ${row.id}`);
+					})
+					.catch((err: unknown) =>
+						console.error(`[tick] analyze-pending trigger failed for ${row.id}:`, err)
+					)
 			);
 		}
 	}
@@ -238,6 +250,10 @@ export const POST: RequestHandler = async ({ request }) => {
 		.lt('analyze_attempts', MAX_ANALYZE_ATTEMPTS) // only if not already retried to max
 		.lt('created_at', stuckDeadline)
 		.not('batch_id', 'is', null); // only batch members — solo uploads have their own retry
+
+	// Await all edge function triggers in parallel — ensures requests are fully sent
+	// before Vercel freezes the serverless process after the response.
+	await Promise.allSettled(triggerPromises);
 
 	return json({ ok: true });
 };
