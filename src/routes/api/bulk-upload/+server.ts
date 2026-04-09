@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { uploadImage } from '$lib/server/storage';
+import { uploadImage, deleteImage } from '$lib/server/storage';
 import { createServiceRoleClient } from '$lib/server/supabase';
 import { randomUUID } from 'crypto';
 import sharp from 'sharp';
@@ -61,7 +61,11 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 	}));
 
 	const { error: insertError } = await supabase.from('pending_uploads').insert(rows);
-	if (insertError) error(500, `Failed to queue uploads: ${insertError.message}`);
+	if (insertError) {
+		// Clean up orphaned temp objects so they don't accumulate
+		await Promise.allSettled(succeeded.map((r) => deleteImage(r.tempPath!)));
+		error(500, `Failed to queue uploads: ${insertError.message}`);
+	}
 
 	return json({ count: succeeded.length });
 };

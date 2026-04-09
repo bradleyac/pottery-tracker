@@ -19,7 +19,9 @@ function parseEmbedding(raw: unknown): number[] {
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {
-	let dot = 0, normA = 0, normB = 0;
+	let dot = 0,
+		normA = 0,
+		normB = 0;
 	for (let k = 0; k < a.length; k++) {
 		dot += a[k] * b[k];
 		normA += a[k] * a[k];
@@ -62,12 +64,8 @@ async function confirmSamePiece(pathA: string, pathB: string): Promise<boolean> 
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function markBatchConsolidated(supabase: any, batchId: string) {
-	await supabase
-		.from('pending_uploads')
-		.update({ batch_consolidated: true })
-		.eq('batch_id', batchId);
-
-	// Set consolidating/waiting_for_batch uploads to ready (not failed ones)
+	// Set consolidating/waiting_for_batch uploads to ready (not failed ones).
+	// The tick is responsible for stamping consolidated_at on pending_batches.
 	await supabase
 		.from('pending_uploads')
 		.update({ status: 'ready' })
