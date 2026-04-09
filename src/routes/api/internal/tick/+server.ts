@@ -129,7 +129,11 @@ export const POST: RequestHandler = async ({ request }) => {
 				if (stuckIds.length > 0) {
 					await supabase
 						.from('pending_uploads')
-						.update({ status: 'failed', analyze_locked_at: null })
+						.update({
+							status: 'failed',
+							analyze_locked_at: null,
+							analyze_last_error: 'Timed out waiting for analysis to complete (batch deadline exceeded)'
+						})
 						.in('id', stuckIds);
 				}
 			}
@@ -187,7 +191,10 @@ export const POST: RequestHandler = async ({ request }) => {
 					// Give up — mark members failed, stamp consolidated_at so the batch stops blocking
 					await supabase
 						.from('pending_uploads')
-						.update({ status: 'failed' })
+						.update({
+							status: 'failed',
+							analyze_last_error: `Batch consolidation failed after ${MAX_BATCH_ATTEMPTS} attempts: ${errMsg}`
+						})
 						.eq('batch_id', batchId)
 						.in('status', ['consolidating', 'waiting_for_batch']);
 
@@ -222,7 +229,11 @@ export const POST: RequestHandler = async ({ request }) => {
 	const stuckDeadline = new Date(Date.now() - BATCH_DEADLINE_MINUTES * 60_000).toISOString();
 	await supabase
 		.from('pending_uploads')
-		.update({ status: 'failed', analyze_locked_at: null })
+		.update({
+			status: 'failed',
+			analyze_locked_at: null,
+			analyze_last_error: 'Timed out: upload was stuck in-progress past the batch deadline'
+		})
 		.in('status', IN_PROGRESS_STATUSES)
 		.lt('analyze_attempts', MAX_ANALYZE_ATTEMPTS) // only if not already retried to max
 		.lt('created_at', stuckDeadline)
