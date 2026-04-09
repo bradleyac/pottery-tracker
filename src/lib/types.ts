@@ -109,7 +109,7 @@ export interface Database {
 				Relationships: [];
 			};
 			app_config: {
-				Row:    { key: string; value: string };
+				Row: { key: string; value: string };
 				Insert: { key: string; value: string };
 				Update: { key?: string; value?: string };
 				Relationships: [];
@@ -130,7 +130,10 @@ export interface Database {
 					batch_id: string | null;
 					embedding: string | null;
 					batch_group_id: string | null;
-					batch_consolidated: boolean;
+					analyze_attempts: number;
+					analyze_next_attempt_at: string | null;
+					analyze_last_error: string | null;
+					analyze_locked_at: string | null;
 				};
 				Insert: {
 					id?: string;
@@ -147,7 +150,10 @@ export interface Database {
 					batch_id?: string | null;
 					embedding?: string | null;
 					batch_group_id?: string | null;
-					batch_consolidated?: boolean;
+					analyze_attempts?: number;
+					analyze_next_attempt_at?: string | null;
+					analyze_last_error?: string | null;
+					analyze_locked_at?: string | null;
 				};
 				Update: {
 					id?: string;
@@ -164,14 +170,60 @@ export interface Database {
 					batch_id?: string | null;
 					embedding?: string | null;
 					batch_group_id?: string | null;
-					batch_consolidated?: boolean;
+					analyze_attempts?: number;
+					analyze_next_attempt_at?: string | null;
+					analyze_last_error?: string | null;
+					analyze_locked_at?: string | null;
+				};
+				Relationships: [];
+			};
+			pending_batches: {
+				Row: {
+					batch_id: string;
+					user_id: string;
+					created_at: string;
+					consolidate_attempts: number;
+					consolidate_next_attempt_at: string | null;
+					consolidate_locked_at: string | null;
+					consolidate_last_error: string | null;
+					consolidated_at: string | null;
+				};
+				Insert: {
+					batch_id: string;
+					user_id: string;
+					created_at?: string;
+					consolidate_attempts?: number;
+					consolidate_next_attempt_at?: string | null;
+					consolidate_locked_at?: string | null;
+					consolidate_last_error?: string | null;
+					consolidated_at?: string | null;
+				};
+				Update: {
+					batch_id?: string;
+					user_id?: string;
+					created_at?: string;
+					consolidate_attempts?: number;
+					consolidate_next_attempt_at?: string | null;
+					consolidate_locked_at?: string | null;
+					consolidate_last_error?: string | null;
+					consolidated_at?: string | null;
 				};
 				Relationships: [];
 			};
 			signed_url_cache: {
-				Row:    { storage_path: string; signed_url: string; expires_at: string; cached_at: string };
-				Insert: { storage_path: string; signed_url: string; expires_at: string; cached_at?: string };
-				Update: { storage_path?: string; signed_url?: string; expires_at?: string; cached_at?: string };
+				Row: { storage_path: string; signed_url: string; expires_at: string; cached_at: string };
+				Insert: {
+					storage_path: string;
+					signed_url: string;
+					expires_at: string;
+					cached_at?: string;
+				};
+				Update: {
+					storage_path?: string;
+					signed_url?: string;
+					expires_at?: string;
+					cached_at?: string;
+				};
 				Relationships: [];
 			};
 		};
@@ -205,6 +257,7 @@ export type PendingBatch = {
 
 // Convenience types
 export type Piece = Database['public']['Tables']['pieces']['Row'];
+export type PendingBatchRow = Database['public']['Tables']['pending_batches']['Row'];
 export type Image = Database['public']['Tables']['images']['Row'];
 export type PieceMatch = Database['public']['Tables']['piece_matches']['Row'];
 export type PendingUpload = Database['public']['Tables']['pending_uploads']['Row'];

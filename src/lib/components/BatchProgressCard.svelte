@@ -41,7 +41,7 @@
 
 	const totalSegments = $derived(segments.reduce((sum, s) => sum + s.count, 0));
 
-	const label = $derived(STATUS_LABELS[batch.worstStatus] ?? 'Processing…');
+	const label = $derived(STATUS_LABELS[batch.worstStatus as PendingUploadStatus] ?? 'Processing…');
 	const photoWord = $derived(batch.uploadCount === 1 ? 'photo' : 'photos');
 </script>
 
@@ -54,10 +54,7 @@
 			{#if segments.length > 0}
 				<div class="progress-bar" role="progressbar" aria-label="Processing progress">
 					{#each segments as seg (seg.status)}
-						<div
-							class="progress-segment"
-							style="flex: {seg.count}; background: {seg.color};"
-						></div>
+						<div class="progress-segment" style="flex: {seg.count}; background: {seg.color};"></div>
 					{/each}
 					{#if totalSegments < batch.uploadCount}
 						<div
