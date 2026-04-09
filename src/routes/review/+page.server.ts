@@ -1,17 +1,15 @@
 import type { PageServerLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
+import { env } from '$env/dynamic/private';
 import { createServiceRoleClient } from '$lib/server/supabase';
 import { getSignedUrls } from '$lib/server/storage';
-import { consolidateBatch } from '$lib/server/batch';
-import type { PendingUploadWithUrls, PendingBatch, PendingUploadStatus, PieceSummary } from '$lib/types';
-
-const IN_PROGRESS_STATUSES: PendingUploadStatus[] = [
-	'queued',
-	'preprocessing',
-	'analyzing',
-	'waiting_for_batch',
-	'consolidating'
-];
+import { IN_PROGRESS_STATUSES } from '$lib/server/statuses';
+import type {
+	PendingUploadWithUrls,
+	PendingBatch,
+	PendingUploadStatus,
+	PieceSummary
+} from '$lib/types';
 
 // Most "in-flight" status ordering — used to pick the representative status for a batch card
 const STATUS_ORDER: PendingUploadStatus[] = [
@@ -45,89 +43,19 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession }, depends
 		};
 	}
 
-	const batchIds = [...new Set(uploads.map((u) => u.batch_id).filter(Boolean))] as string[];
-
-	// Fallback consolidation covers two cases:
-	// 1. Normal: all members settled (ready|failed|waiting_for_batch), not consolidated, > 30s old.
-	// 2. Stuck: any member still in an in-progress status after > 5 min (webhook missed, edge
-	//    function timed out, or APP_URL was unset so the consolidate trigger never fired).
-	if (batchIds.length > 0) {
-		const THIRTY_SECONDS = 30_000;
-		const FIVE_MINUTES_MS = 5 * 60_000;
-		const nowMs = Date.now();
-
-		const fallbackBatchIds = batchIds.filter((id) => {
-			const members = uploads.filter((u) => u.batch_id === id);
-			const oldestMs = Math.min(...members.map((u) => new Date(u.created_at).getTime()));
-			const age = nowMs - oldestMs;
-
-			// Case 1: normal — all settled, not yet consolidated, > 30s
-			const allSettled = members.every(
-				(u) => u.status === 'ready' || u.status === 'failed' || u.status === 'waiting_for_batch'
-			);
-			const notConsolidated = members.some((u) => !u.batch_consolidated);
-			if (allSettled && notConsolidated && age > THIRTY_SECONDS) return true;
-
-			// Case 2: stuck — any in-progress member older than 5 min
-			if (age > FIVE_MINUTES_MS) {
-				const hasStuck = members.some((u) =>
-					IN_PROGRESS_STATUSES.includes(u.status as PendingUploadStatus)
-				);
-				if (hasStuck) return true;
-			}
-
-			return false;
-		});
-
-		for (const batchId of fallbackBatchIds) {
-			try {
-				const members = uploads.filter((u) => u.batch_id === batchId);
-				const oldestMs = Math.min(...members.map((u) => new Date(u.created_at).getTime()));
-				const age = nowMs - oldestMs;
-
-				// For stuck batches: force-fail items still stuck in early analysis statuses
-				// so consolidateBatch can proceed with the items that did complete.
-				if (age > FIVE_MINUTES_MS) {
-					const stuckEarlyIds = members
-						.filter((u) => ['queued', 'preprocessing', 'analyzing'].includes(u.status))
-						.map((u) => u.id);
-					if (stuckEarlyIds.length > 0) {
-						await supabase
-							.from('pending_uploads')
-							.update({ status: 'failed' })
-							.in('id', stuckEarlyIds);
-					}
-				}
-
-				const notConsolidated = members.some((u) => !u.batch_consolidated);
-				if (notConsolidated) {
-					// Atomic claim — prevents two overlapping page loads from both running consolidateBatch.
-					const { data: claimed } = await supabase
-						.from('pending_uploads')
-						.update({ batch_consolidated: true })
-						.eq('batch_id', batchId)
-						.eq('batch_consolidated', false)
-						.select('id');
-
-					if (!claimed || claimed.length === 0) continue; // lost the race; another load claimed it
-				}
-				// If already consolidated (stuck in 'consolidating' status): fall through and re-run.
-				// consolidateBatch is safe to call again — it re-queries the DB and re-applies grouping.
-
-				await consolidateBatch(batchId);
-			} catch (err) {
-				console.error(`[review] consolidateBatch fallback failed for ${batchId}:`, err);
-			}
-		}
-
-		// Re-fetch if any consolidation ran
-		if (fallbackBatchIds.length > 0) {
-			const { data: refreshed } = await supabase
-				.from('pending_uploads')
-				.select('*')
-				.eq('user_id', user.id)
-				.order('created_at', { ascending: true });
-			if (refreshed) uploads.splice(0, uploads.length, ...refreshed);
+	// Nudge the tick to run immediately — it is the canonical recovery path.
+	// This is fire-and-forget and must not block the page load.
+	if (uploads.some((u) => IN_PROGRESS_STATUSES.includes(u.status as PendingUploadStatus))) {
+		const appUrl = env.APP_URL ?? '';
+		if (appUrl) {
+			fetch(`${appUrl}/api/internal/tick`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`
+				},
+				body: '{}'
+			}).catch((err: unknown) => console.warn('[review] tick nudge failed:', err));
 		}
 	}
 
@@ -146,8 +74,7 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession }, depends
 			const s = m.status as PendingUploadStatus;
 			statusCounts[s] = (statusCounts[s] ?? 0) + 1;
 		}
-		const worstStatus =
-			STATUS_ORDER.find((s) => statusCounts[s] !== undefined) ?? 'queued';
+		const worstStatus = STATUS_ORDER.find((s) => statusCounts[s] !== undefined) ?? 'queued';
 		return {
 			batchId,
 			uploadCount: members.length,
@@ -157,9 +84,7 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession }, depends
 	});
 
 	// Exclude in-flight batch members from the visible upload list
-	const visibleUploads = uploads.filter(
-		(u) => !u.batch_id || !inProgressBatchIds.has(u.batch_id)
-	);
+	const visibleUploads = uploads.filter((u) => !u.batch_id || !inProgressBatchIds.has(u.batch_id));
 
 	// Collect all storage paths to sign
 	const tempPaths = visibleUploads.map((u) => u.temp_storage_path);
@@ -180,9 +105,7 @@ export const load: PageServerLoad = async ({ locals: { safeGetSession }, depends
 			.in('id', matchedPieceIds);
 
 		if (matchedPieces) {
-			const coverImageIds = matchedPieces
-				.map((p) => p.cover_image_id)
-				.filter(Boolean) as string[];
+			const coverImageIds = matchedPieces.map((p) => p.cover_image_id).filter(Boolean) as string[];
 
 			const coverImagePathMap = new Map<string, string>();
 			if (coverImageIds.length > 0) {
