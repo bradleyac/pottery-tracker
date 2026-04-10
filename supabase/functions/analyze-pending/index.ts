@@ -250,22 +250,35 @@ Deno.serve(async (req: Request) => {
 		const bytes = await blobData.arrayBuffer();
 		const imageBase64 = btoa(String.fromCharCode(...new Uint8Array(bytes)));
 
-		// Remove background for cleaner embedding and matching — non-fatal, store clean temp
+		// Remove background for cleaner embedding and matching — non-fatal, store clean temp.
+		// On retries, skip Replicate if the clean image was already stored successfully.
 		let cleanImageBase64 = imageBase64;
+		const cleanTempPath = tempPath.replace(/([^/]+\.jpg)$/, 'clean_$1');
+
 		if (replicateToken) {
-			await setStatus(uploadId, 'preprocessing');
-			try {
-				cleanImageBase64 = await removeBackgroundDeno(replicateToken, imageBase64);
-				const cleanTempPath = tempPath.replace(/([^/]+\.jpg)$/, 'clean_$1');
-				const cleanBytes = Uint8Array.from(atob(cleanImageBase64), (c) => c.charCodeAt(0));
-				await supabase.storage.from('pottery-images').upload(cleanTempPath, cleanBytes, {
-					contentType: 'image/jpeg',
-					upsert: true
-				});
-				console.log('[analyze-pending] background removal complete');
-			} catch (err) {
-				console.warn('[analyze-pending] background removal failed (non-fatal):', err);
-				cleanImageBase64 = imageBase64;
+			// Check if a previous attempt already produced a clean image
+			const { data: existingClean } = await supabase.storage
+				.from('pottery-images')
+				.download(cleanTempPath);
+
+			if (existingClean) {
+				const existingBytes = await existingClean.arrayBuffer();
+				cleanImageBase64 = btoa(String.fromCharCode(...new Uint8Array(existingBytes)));
+				console.log('[analyze-pending] using cached background-removed image');
+			} else {
+				await setStatus(uploadId, 'preprocessing');
+				try {
+					cleanImageBase64 = await removeBackgroundDeno(replicateToken, imageBase64);
+					const cleanBytes = Uint8Array.from(atob(cleanImageBase64), (c) => c.charCodeAt(0));
+					await supabase.storage.from('pottery-images').upload(cleanTempPath, cleanBytes, {
+						contentType: 'image/jpeg',
+						upsert: true
+					});
+					console.log('[analyze-pending] background removal complete');
+				} catch (err) {
+					console.warn('[analyze-pending] background removal failed (non-fatal):', err);
+					// cleanImageBase64 stays as imageBase64; nothing uploaded so next retry will try again
+				}
 			}
 		}
 
