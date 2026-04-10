@@ -176,8 +176,8 @@ Deno.serve(async (req: Request) => {
 	const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 	const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-	const authHeader = req.headers.get('Authorization');
-	if (authHeader !== `Bearer ${serviceRoleKey}`) {
+	const apiKey = req.headers.get('apikey');
+	if (apiKey !== serviceRoleKey) {
 		return new Response('Unauthorized', { status: 401 });
 	}
 	const geminiKey = Deno.env.get('GEMINI_API_KEY')!;
