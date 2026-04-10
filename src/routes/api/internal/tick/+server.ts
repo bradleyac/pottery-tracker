@@ -1,5 +1,5 @@
 import { env } from '$env/dynamic/private';
-import { PUBLIC_SUPABASE_ANON_KEY, PUBLIC_SUPABASE_URL } from '$env/static/public';
+import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { consolidateBatch } from '$lib/server/batch';
 import {
 	IN_PROGRESS_STATUSES,
@@ -74,8 +74,7 @@ export const POST: RequestHandler = async ({ request }) => {
 					method: 'POST',
 					headers: {
 						'Content-Type': 'application/json',
-						Authorization: `Bearer ${PUBLIC_SUPABASE_ANON_KEY}`,
-						'apikey': PUBLIC_SUPABASE_ANON_KEY
+						Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`
 					},
 					body: JSON.stringify({ uploadId: row.id }),
 					signal: AbortSignal.timeout(90_000)
