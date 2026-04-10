@@ -1,8 +1,5 @@
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
-import { createServiceRoleClient } from '$lib/server/supabase';
+import { PUBLIC_SUPABASE_ANON_KEY, PUBLIC_SUPABASE_URL } from '$env/static/public';
 import { consolidateBatch } from '$lib/server/batch';
 import {
 	IN_PROGRESS_STATUSES,
@@ -10,7 +7,10 @@ import {
 	MAX_BATCH_ATTEMPTS,
 	nextBackoff
 } from '$lib/server/statuses';
+import { createServiceRoleClient } from '$lib/server/supabase';
 import type { PendingUploadStatus } from '$lib/types';
+import { error, json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 
 const TICK_LIMIT = 25;
 const ANALYZE_LEASE_MINUTES = 5;
@@ -30,7 +30,6 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	const supabase = createServiceRoleClient();
 	const edgeFunctionUrl = `${PUBLIC_SUPABASE_URL}/functions/v1/analyze-pending`;
-	const serviceKey = env.;
 
 	// ─── Sweep A: release expired analyze leases ─────────────────────────────
 	await supabase
