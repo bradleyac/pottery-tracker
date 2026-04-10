@@ -13,3 +13,9 @@ vite.config.js.timestamp-*
 
 *storybook.log
 storybook-static
+
+# Eval harness
+scripts/eval/.cache/
+scripts/eval/results/
+/eval/
+pieces-export/
