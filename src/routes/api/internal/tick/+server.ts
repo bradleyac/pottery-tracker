@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
-import { PUBLIC_SUPABASE_URL } from '$env/static/public';
+import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { createServiceRoleClient } from '$lib/server/supabase';
 import { consolidateBatch } from '$lib/server/batch';
 import {
@@ -30,7 +30,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	const supabase = createServiceRoleClient();
 	const edgeFunctionUrl = `${PUBLIC_SUPABASE_URL}/functions/v1/analyze-pending`;
-	const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
+	const serviceKey = env.;
 
 	// ─── Sweep A: release expired analyze leases ─────────────────────────────
 	await supabase
@@ -75,7 +75,7 @@ export const POST: RequestHandler = async ({ request }) => {
 					method: 'POST',
 					headers: {
 						'Content-Type': 'application/json',
-						Authorization: `Bearer ${serviceKey}`
+						Authorization: `Bearer ${PUBLIC_SUPABASE_ANON_KEY}`
 					},
 					body: JSON.stringify({ uploadId: row.id }),
 					signal: AbortSignal.timeout(90_000)
