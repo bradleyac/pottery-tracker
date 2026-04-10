@@ -74,7 +74,8 @@ export const POST: RequestHandler = async ({ request }) => {
 					method: 'POST',
 					headers: {
 						'Content-Type': 'application/json',
-						Authorization: `Bearer ${PUBLIC_SUPABASE_ANON_KEY}`
+						Authorization: `Bearer ${PUBLIC_SUPABASE_ANON_KEY}`,
+						'apiKey': PUBLIC_SUPABASE_ANON_KEY
 					},
 					body: JSON.stringify({ uploadId: row.id }),
 					signal: AbortSignal.timeout(90_000)
