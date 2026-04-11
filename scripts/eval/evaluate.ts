@@ -22,13 +22,15 @@
  *   --top-k <values>      Comma-separated k values (default: 1,3,5,8)
  *   --bg-remove           Run each pipeline twice: once as-is, once with background removed
  *                         (requires REPLICATE_API_TOKEN; results cached in .cache/bg-removed/)
+ *   --save-images <dir>   Save preprocessed images to <dir>/<pipeline>/<piece>/<image>.jpg
+ *                         just before embedding — useful for visually inspecting pipeline output
  *   --json                Write JSON report to scripts/eval/results/
  *   --init                Generate manifest.json and exit
  *   --verbose             Show per-piece breakdown for each config
  */
 
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { join, basename } from 'node:path';
 import { parseArgs } from 'node:util';
 import type { Manifest, EmbeddingResult, PipelineMetrics, PerPieceMetrics } from './types.ts';
 import { EmbeddingCache } from './cache.ts';
@@ -49,6 +51,7 @@ const { values: args } = parseArgs({
 		embedders: { type: 'string' },
 		'top-k': { type: 'string', default: '1,3,5,8' },
 		'bg-remove': { type: 'boolean', default: false },
+		'save-images': { type: 'string' },
 		json: { type: 'boolean', default: false },
 		init: { type: 'boolean', default: false },
 		verbose: { type: 'boolean', default: false }
@@ -185,6 +188,13 @@ for (const { suffix, useBgRemoval } of bgVariants) {
 						}
 
 						const preprocessed = await runPipeline(pipeline, workingBuffer);
+
+						if (args['save-images']) {
+							const saveDir = join(args['save-images'], pipelineName, piece.id);
+							await mkdir(saveDir, { recursive: true });
+							const filename = basename(image.path).replace(/\.[^.]+$/, '.jpg');
+							await writeFile(join(saveDir, filename), preprocessed);
+						}
 
 						let embedding = await cache.get(preprocessed, embedder.name);
 						if (embedding) {

@@ -191,5 +191,10 @@ export const DEFAULT_PIPELINES: PreprocessingPipeline[] = [
 	// object scale as well as aspect ratio.
 	buildPipeline('bbox-square512', ['bbox-crop', 'square512']),
 	buildPipeline('bbox-square768', ['bbox-crop', 'square768']),
-	buildPipeline('bbox-square1024', ['bbox-crop', 'square1024'])
+	buildPipeline('bbox-square1024', ['bbox-crop', 'square1024']),
+
+	buildPipeline('bbox-square512+gs+norm', ['bbox-crop', 'square512', 'grayscale', 'normalize']),
+	buildPipeline('bbox-square1024+gs+norm', ['bbox-crop', 'square1024', 'grayscale', 'normalize']),
+	buildPipeline('bbox-square512+gs+clahe', ['bbox-crop', 'square512', 'grayscale', 'clahe']),
+	buildPipeline('bbox-square1024+gs+clahe', ['bbox-crop', 'square1024', 'grayscale', 'clahe']),
 ];
