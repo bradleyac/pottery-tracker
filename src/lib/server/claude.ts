@@ -1,15 +1,14 @@
+import { env } from '$env/dynamic/private';
+import type { ClaudeMatchResult } from '$lib/types';
 import { GoogleGenAI } from '@google/genai';
 import sharp from 'sharp';
-import type { ClaudeMatchResult } from '$lib/types';
-import { env } from '$env/dynamic/private';
 import {
-	DESCRIBE_SYSTEM_PROMPT,
 	BOUNDS_PROMPT,
-	parseResponseJson,
-	parseBoundsResponse
+	DESCRIBE_SYSTEM_PROMPT,
+	parseBoundsResponse,
+	parseResponseJson
 } from '../../../supabase/functions/_shared/matching.js';
-import type { MatchingStrategy } from './strategies';
-import type { RawCandidate } from './strategies';
+import type { MatchingStrategy, RawCandidate } from './strategies';
 
 const MATCH_MODEL = 'gemini-2.5-flash';
 const DESCRIBE_MODEL = 'gemini-2.5-flash';
@@ -30,12 +29,12 @@ type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
 
 const EMBEDDING_MODEL = 'gemini-embedding-2-preview';
 
-// Resize to at most 512px on the longest side before sending to the model.
+// Resize to at most 1024px on the longest side before sending to the model.
 // Originals are stored at full resolution; only the API payload is shrunk.
 export async function resizeForApi(buffer: Buffer): Promise<{ data: string; mimeType: 'image/jpeg' }> {
 	const resized = await sharp(buffer)
 		.rotate() // auto-orient from EXIF so portrait images aren't sent sideways
-		.resize({ width: 512, height: 512, fit: 'inside', withoutEnlargement: true })
+		.resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
 		.jpeg({ quality: 82 })
 		.toBuffer();
 	return { data: resized.toString('base64'), mimeType: 'image/jpeg' };

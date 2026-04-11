@@ -43,7 +43,7 @@
 		});
 		URL.revokeObjectURL(url);
 
-		const MAX = 512;
+		const MAX = 1024;
 		const scale = Math.min(1, MAX / Math.max(img.width, img.height));
 		const w = Math.round(img.width * scale);
 		const h = Math.round(img.height * scale);

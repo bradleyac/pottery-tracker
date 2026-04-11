@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import sharp from 'sharp';
 
 const DEFAULT_BG_REMOVE_MODEL =
@@ -9,7 +9,7 @@ const DEFAULT_BG_REMOVE_MODEL =
 // ── Cache ────────────────────────────────────────────────────────────────────
 
 export class BgRemovalCache {
-	constructor(private cacheDir: string) {}
+	constructor(private cacheDir: string) { }
 
 	private keyPath(rawBuffer: Buffer): string {
 		const hash = createHash('sha256').update(rawBuffer).digest('hex');
@@ -40,7 +40,7 @@ export async function removeBackground(
 ): Promise<Buffer> {
 	const resized = await sharp(buffer)
 		.rotate()
-		.resize({ width: 512, height: 512, fit: 'inside', withoutEnlargement: true })
+		.resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
 		.jpeg({ quality: 90 })
 		.toBuffer();
 

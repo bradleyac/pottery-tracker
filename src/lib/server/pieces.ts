@@ -1,19 +1,18 @@
-import { createServiceRoleClient } from './supabase';
+import { randomUUID } from 'crypto';
+import { removeBackground } from './bgremove';
+import type { ExistingPiece } from './claude';
+import { describeNewPiece, generateImageEmbedding, resizeForApi } from './claude';
 import {
-	uploadImage,
-	deleteImage,
-	deleteCachedUrls,
+	buildCleanImagePath,
 	buildStoragePath,
 	buildThumbnailPath,
-	buildCleanImagePath,
+	deleteCachedUrls,
+	deleteImage,
 	getSignedUrls,
-	downloadImage
+	uploadImage
 } from './storage';
-import { removeBackground } from './bgremove';
-import { describeNewPiece, resizeForApi, generateImageEmbedding } from './claude';
-import type { ExistingPiece } from './claude';
 import type { RawCandidate } from './strategies';
-import { randomUUID } from 'crypto';
+import { createServiceRoleClient } from './supabase';
 
 export type { ExistingPiece };
 
@@ -98,8 +97,8 @@ export async function createPieceFromTemp(
 	} catch {
 		// ignore
 	}
-	await deleteImage(cleanTempPath).catch(() => {});
-	await deleteCachedUrls([tempPath, cleanTempPath]).catch(() => {});
+	await deleteImage(cleanTempPath).catch(() => { });
+	await deleteCachedUrls([tempPath, cleanTempPath]).catch(() => { });
 
 	let aiDescription = updatedDescription ?? null;
 	if (!aiDescription) {
@@ -117,7 +116,7 @@ export async function createPieceFromTemp(
 		// Non-fatal
 	}
 
-	// Store 512px thumbnail for matching (from clean image)
+	// Store 1024px thumbnail for matching (from clean image)
 	try {
 		const { data: thumbData, mimeType: thumbMime } = await resizeForApi(cleanBuffer);
 		const thumbPath = buildThumbnailPath(userId, pieceId, imageId);
@@ -200,8 +199,8 @@ export async function addImageToExistingPiece(
 	} catch {
 		// Non-fatal
 	}
-	await deleteImage(cleanTempPath).catch(() => {});
-	await deleteCachedUrls([tempPath, cleanTempPath]).catch(() => {});
+	await deleteImage(cleanTempPath).catch(() => { });
+	await deleteCachedUrls([tempPath, cleanTempPath]).catch(() => { });
 
 	const isFirstImage = !piece.cover_image_id;
 	const { error: insertError } = await supabase.from('images').insert({

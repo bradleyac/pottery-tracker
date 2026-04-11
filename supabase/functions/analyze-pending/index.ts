@@ -241,7 +241,7 @@ Deno.serve(async (req: Request) => {
 	}
 
 	try {
-		// Download the temp image (pre-resized to 512px by the bulk-upload route)
+		// Download the temp image (pre-resized to 1024px by the bulk-upload route)
 		const { data: blobData, error: dlErr } = await supabase.storage
 			.from('pottery-images')
 			.download(tempPath);

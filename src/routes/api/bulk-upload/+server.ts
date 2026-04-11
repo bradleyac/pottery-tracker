@@ -1,9 +1,9 @@
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from './$types';
-import { uploadImage, deleteImage } from '$lib/server/storage';
+import { deleteImage, uploadImage } from '$lib/server/storage';
 import { createServiceRoleClient } from '$lib/server/supabase';
+import { error, json } from '@sveltejs/kit';
 import { randomUUID } from 'crypto';
 import sharp from 'sharp';
+import type { RequestHandler } from './$types';
 
 const MAX_FILES = 20;
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -29,10 +29,10 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 			}
 			try {
 				const rawBuffer = Buffer.from(await file.arrayBuffer());
-				// Resize to 512px so the Edge Function can pass it directly to Anthropic
+				// Resize to 1024px so the Edge Function can pass it directly to Anthropic
 				const buffer = await sharp(rawBuffer)
 					.rotate() // auto-orient from EXIF before resizing so tall portraits aren't rotated by rembg
-					.resize({ width: 512, height: 512, fit: 'inside', withoutEnlargement: true })
+					.resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
 					.jpeg({ quality: 82 })
 					.toBuffer();
 				const uuid = randomUUID();

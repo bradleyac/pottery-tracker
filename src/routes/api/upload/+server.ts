@@ -1,16 +1,16 @@
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from './$types';
-import { matchImageToPieces, describeNewPiece, generateImageEmbedding } from '$lib/server/claude';
-import { uploadImage } from '$lib/server/storage';
 import { removeBackground } from '$lib/server/bgremove';
-import sharp from 'sharp';
+import { describeNewPiece, generateImageEmbedding, matchImageToPieces } from '$lib/server/claude';
 import {
+	getCandidatesByEmbedding,
 	getExistingPiecesForMatching,
-	getPieceCoverUrls,
-	getCandidatesByEmbedding
+	getPieceCoverUrls
 } from '$lib/server/pieces';
+import { uploadImage } from '$lib/server/storage';
 import { getMatchingStrategy } from '$lib/server/strategies';
+import { error, json } from '@sveltejs/kit';
 import { randomUUID } from 'crypto';
+import sharp from 'sharp';
+import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request, locals: { safeGetSession } }) => {
 	const { session, user } = await safeGetSession();
@@ -29,10 +29,10 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 
 	const rawBuffer = Buffer.from(await file.arrayBuffer());
 
-	// Resize to 512px (matching bulk-upload) so all stored images are consistently small
+	// Resize to 1024px (matching bulk-upload) so all stored images are consistently small
 	const buffer = await sharp(rawBuffer)
 		.rotate() // auto-orient from EXIF before resizing
-		.resize({ width: 512, height: 512, fit: 'inside', withoutEnlargement: true })
+		.resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
 		.jpeg({ quality: 82 })
 		.toBuffer();
 
@@ -45,7 +45,7 @@ export const POST: RequestHandler = async ({ request, locals: { safeGetSession }
 	// Remove background for cleaner embedding and matching — fall back to original on failure
 	const cleanTempPath = `${user.id}/temp/clean_${tempId}.jpg`;
 	const cleanBuffer = await removeBackground(buffer).catch(() => buffer);
-	await uploadImage(cleanBuffer, cleanTempPath, 'image/jpeg').catch(() => {});
+	await uploadImage(cleanBuffer, cleanTempPath, 'image/jpeg').catch(() => { });
 
 	// Get all pieces (for UI dropdown) and cover paths (for signed URLs)
 	const { existingPieces, coverPathMap } = await getExistingPiecesForMatching(user.id);

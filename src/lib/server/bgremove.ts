@@ -1,5 +1,5 @@
-import sharp from 'sharp';
 import { env } from '$env/dynamic/private';
+import sharp from 'sharp';
 
 const DEFAULT_BG_REMOVE_VERSION =
 	'cjwbw/rembg:fb8af171cfa1616ddcf1242c093f9c46bcada5ad4cf6f2fbe8b81b330ec5c003';
@@ -12,7 +12,7 @@ export async function removeBackground(buffer: Buffer): Promise<Buffer> {
 
 	const resized = await sharp(buffer)
 		.rotate() // auto-orient from EXIF before resizing so tall portraits aren't rotated by rembg
-		.resize({ width: 512, height: 512, fit: 'inside', withoutEnlargement: true })
+		.resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
 		.jpeg({ quality: 90 })
 		.toBuffer();
 

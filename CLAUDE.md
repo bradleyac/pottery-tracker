@@ -44,7 +44,7 @@ This is a pottery-tracking app. Users upload photos; Gemini Flash matches them t
 - **Two Supabase clients**: `createSupabaseServerClient(event)` (cookie-based, user auth) used in `hooks.server.ts`; `createServiceRoleClient()` (service role, bypasses RLS) used everywhere data is actually read/written
 - **All DB queries are in `+page.server.ts` load functions** — no client-side DB access
 - **Signed URLs generated server-side** with service-role key, never on the client. Bucket `pottery-images` has RLS; all access goes through signed URLs
-- **Image preprocessing**: images are resized to ≤512px via `sharp` before sending to Gemini to control token costs. Originals stored at full resolution. 512px thumbnails stored at `{user_id}/{piece_id}/thumb_{image_id}.jpg` for fast candidate retrieval during matching.
+- **Image preprocessing**: images are resized to ≤1024px via `sharp` before sending to Gemini to control token costs. Originals stored at full resolution. 1024px thumbnails stored at `{user_id}/{piece_id}/thumb_{image_id}.jpg` for fast candidate retrieval during matching.
 - **Gemini Flash**: `gemini-2.5-flash` for both matching and descriptions (vision + reasoning). Uses `@google/genai` SDK on the server, REST API in the Deno edge function.
 - **Image embeddings**: `gemini-embedding-2-preview` generates 768-dim embeddings for cover images, stored in `pieces.cover_embedding` (pgvector `vector(768)` column). Used for nearest-neighbor pre-filtering before visual comparison.
 - **Matching flow**: upload → embed new image → `match_pieces` RPC (pgvector cosine similarity, top 8) → strategy fetches candidate images → multi-image Gemini request → return match result. Gemini's 10-image-per-request limit caps candidates at 9.

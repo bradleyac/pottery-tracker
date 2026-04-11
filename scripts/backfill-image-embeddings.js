@@ -10,8 +10,8 @@
  * avoid hitting Gemini rate limits.
  */
 
-import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
+import { createClient } from '@supabase/supabase-js';
 import sharp from 'sharp';
 
 const EMBEDDING_MODEL = 'gemini-embedding-2-preview';
@@ -30,7 +30,7 @@ const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 async function resizeAndEncode(buffer) {
 	const resized = await sharp(buffer)
 		.rotate()
-		.resize({ width: 512, height: 512, fit: 'inside', withoutEnlargement: true })
+		.resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
 		.jpeg({ quality: 82 })
 		.toBuffer();
 	return resized.toString('base64');
