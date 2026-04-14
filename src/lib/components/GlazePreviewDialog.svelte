@@ -6,12 +6,14 @@
 		open = $bindable(),
 		pieceId,
 		images,
-		glazeInspirations
+		glazeInspirations,
+		onsaved
 	}: {
 		open: boolean;
 		pieceId: string;
 		images: ImageWithUrl[];
 		glazeInspirations: GlazeInspirationWithUrl[];
+		onsaved?: () => void;
 	} = $props();
 
 	let selectedImageId = $state<string | null>(null);
@@ -19,6 +21,9 @@
 	let generating = $state(false);
 	let resultUrl = $state<string | null>(null);
 	let generateError = $state<string | null>(null);
+	let saving = $state(false);
+	let saveError = $state<string | null>(null);
+	let saved = $state(false);
 
 	function close() {
 		if (generating) return;
@@ -30,6 +35,9 @@
 		selectedInspirationId = null;
 		resultUrl = null;
 		generateError = null;
+		saving = false;
+		saveError = null;
+		saved = false;
 	}
 
 	$effect(() => {
@@ -67,6 +75,30 @@
 		}
 	}
 
+	async function savePreview() {
+		if (!resultUrl || saving || saved) return;
+		saving = true;
+		saveError = null;
+		try {
+			const resp = await fetch(`/api/pieces/${pieceId}/glaze-preview/save`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					imageUrl: resultUrl,
+					pieceImageId: selectedImageId,
+					glazeInspirationId: selectedInspirationId
+				})
+			});
+			if (!resp.ok) throw new Error((await resp.text()) || 'Save failed');
+			saved = true;
+			onsaved?.();
+		} catch (err) {
+			saveError = err instanceof Error ? err.message : 'Save failed';
+		} finally {
+			saving = false;
+		}
+	}
+
 	const canGenerate = $derived(!!selectedImageId && !!selectedInspirationId && !generating);
 </script>
 
@@ -82,12 +114,21 @@
 			{#if resultUrl}
 				<div class="result">
 					<img src={resultUrl} alt="Generated glaze preview" class="result-image" />
-					<p class="result-note">
-						Preview image — expires after ~24 hours. Screenshot to save.
-					</p>
-					<button class="btn-secondary" onclick={() => { resultUrl = null; }}>
-						Generate Another
-					</button>
+					<div class="result-actions">
+						{#if saved}
+							<p class="save-success">Saved to Glaze Previews</p>
+						{:else}
+							<button class="btn-primary" onclick={savePreview} disabled={saving}>
+								{saving ? 'Saving…' : 'Save Preview'}
+							</button>
+						{/if}
+						<button class="btn-secondary" onclick={() => { resultUrl = null; saved = false; }}>
+							Generate Another
+						</button>
+					</div>
+					{#if saveError}
+						<p class="save-error">{saveError}</p>
+					{/if}
 				</div>
 			{:else}
 				<div class="selections">
@@ -362,9 +403,30 @@
 		border: 1px solid #ede8e0;
 	}
 
-	.result-note {
+	.result-actions {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.5rem;
+		width: 100%;
+		max-width: 320px;
+	}
+
+	.result-actions .btn-primary {
+		width: 100%;
+	}
+
+	.save-success {
+		font-size: 0.9375rem;
+		font-weight: 600;
+		color: #15803d;
+		text-align: center;
+		padding: 0.625rem 1.25rem;
+	}
+
+	.save-error {
 		font-size: 0.8125rem;
-		color: #9a7060;
+		color: #b91c1c;
 		text-align: center;
 	}
 

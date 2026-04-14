@@ -250,6 +250,36 @@ export interface Database {
 				};
 				Relationships: [];
 			};
+			glaze_previews: {
+				Row: {
+					id: string;
+					piece_id: string;
+					user_id: string;
+					storage_path: string;
+					piece_image_id: string | null;
+					glaze_inspiration_id: string | null;
+					created_at: string;
+				};
+				Insert: {
+					id?: string;
+					piece_id: string;
+					user_id: string;
+					storage_path: string;
+					piece_image_id?: string | null;
+					glaze_inspiration_id?: string | null;
+					created_at?: string;
+				};
+				Update: {
+					id?: string;
+					piece_id?: string;
+					user_id?: string;
+					storage_path?: string;
+					piece_image_id?: string | null;
+					glaze_inspiration_id?: string | null;
+					created_at?: string;
+				};
+				Relationships: [];
+			};
 		};
 		Views: Record<string, never>;
 		Functions: Record<
@@ -314,6 +344,9 @@ export type PendingUploadWithUrls = PendingUpload & {
 
 export type GlazeInspiration = Database['public']['Tables']['glaze_inspirations']['Row'];
 export type GlazeInspirationWithUrl = GlazeInspiration & { url: string };
+
+export type GlazePreview = Database['public']['Tables']['glaze_previews']['Row'];
+export type GlazePreviewWithUrl = GlazePreview & { url: string };
 
 export type ClaudeMatchResult = {
 	matchedPieceId: string | null;

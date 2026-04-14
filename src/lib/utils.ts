@@ -1,3 +1,31 @@
+/**
+ * Resize an image File to fit within maxPx on its longest side, returning a
+ * new JPEG File. If the image is already within bounds, returns it unchanged.
+ * Browser-only (uses Canvas API).
+ */
+export async function resizeImageToJpeg(file: File, maxPx = 1024, quality = 0.85): Promise<File> {
+	const bitmap = await createImageBitmap(file);
+	const { width, height } = bitmap;
+
+	if (width <= maxPx && height <= maxPx) {
+		bitmap.close();
+		return file;
+	}
+
+	const scale = maxPx / Math.max(width, height);
+	const canvas = document.createElement('canvas');
+	canvas.width = Math.round(width * scale);
+	canvas.height = Math.round(height * scale);
+	canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+	bitmap.close();
+
+	const blob = await new Promise<Blob>((resolve, reject) => {
+		canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('canvas.toBlob failed'))), 'image/jpeg', quality);
+	});
+
+	return new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
+}
+
 export function formatDate(dateString: string): string {
 	return new Date(dateString).toLocaleDateString('en-US', {
 		year: 'numeric',

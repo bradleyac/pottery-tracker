@@ -7,7 +7,7 @@
 
 	let { data } = $props<{ data: PageData }>();
 
-	let { piece, glazeInspirations } = $derived(data);
+	let { piece, glazeInspirations, glazePreviews } = $derived(data);
 
 	let fileInput: HTMLInputElement;
 	let uploading = $state(false);
@@ -155,6 +155,7 @@
 		pieceId={piece.id}
 		images={piece.images}
 		{glazeInspirations}
+		onsaved={invalidateAll}
 	/>
 
 	{#if piece.images.length === 0}
@@ -168,6 +169,20 @@
 		<section class="timeline-section">
 			<h2>Photo Timeline</h2>
 			<ImageGallery images={piece.images} ondelete={handleDeleteImage} />
+		</section>
+	{/if}
+
+	{#if glazePreviews.length > 0}
+		<section class="previews-section">
+			<h2>Glaze Previews</h2>
+			<div class="previews-grid">
+				{#each glazePreviews as preview (preview.id)}
+					<div class="preview-card">
+						<img src={preview.url} alt="Glaze preview" loading="lazy" />
+						<p class="preview-date">{formatDate(preview.created_at)}</p>
+					</div>
+				{/each}
+			</div>
 		</section>
 	{/if}
 </div>
@@ -361,11 +376,42 @@
 		color: #9a7060;
 	}
 
-	.timeline-section h2 {
+	.timeline-section h2,
+	.previews-section h2 {
 		font-size: 1.125rem;
 		font-weight: 600;
 		color: #4a3728;
 		margin-bottom: 1.25rem;
+	}
+
+	.previews-section {
+		margin-top: 2.5rem;
+	}
+
+	.previews-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+		gap: 1rem;
+	}
+
+	.preview-card {
+		background: white;
+		border-radius: 10px;
+		overflow: hidden;
+		border: 1px solid #ede8e0;
+	}
+
+	.preview-card img {
+		width: 100%;
+		aspect-ratio: 1;
+		object-fit: cover;
+		display: block;
+	}
+
+	.preview-date {
+		font-size: 0.75rem;
+		color: #9a7060;
+		padding: 0.375rem 0.625rem;
 	}
 
 	.empty-images {

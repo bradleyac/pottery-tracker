@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { getSignedUrls } from '$lib/server/storage';
-import type { ImageWithUrl, PieceWithImages, GlazeInspirationWithUrl } from '$lib/types';
+import type { ImageWithUrl, PieceWithImages, GlazeInspirationWithUrl, GlazePreviewWithUrl } from '$lib/types';
 import { createServiceRoleClient } from '$lib/server/supabase';
 
 export const load: PageServerLoad = async ({ params, locals: { safeGetSession } }) => {
@@ -34,9 +34,17 @@ export const load: PageServerLoad = async ({ params, locals: { safeGetSession } 
 		.eq('user_id', user.id)
 		.order('created_at', { ascending: false });
 
+	const { data: previewRows } = await supabase
+		.from('glaze_previews')
+		.select('id, piece_id, user_id, storage_path, piece_image_id, glaze_inspiration_id, created_at')
+		.eq('piece_id', params.id)
+		.eq('user_id', user.id)
+		.order('created_at', { ascending: false });
+
 	const allPaths = [
 		...(images ?? []).map((img) => img.storage_path),
-		...(inspirationRows ?? []).map((r) => r.storage_path)
+		...(inspirationRows ?? []).map((r) => r.storage_path),
+		...(previewRows ?? []).map((r) => r.storage_path)
 	];
 	const signedUrls = await getSignedUrls(allPaths);
 
@@ -57,6 +65,11 @@ export const load: PageServerLoad = async ({ params, locals: { safeGetSession } 
 		url: signedUrls.get(r.storage_path) ?? ''
 	}));
 
+	const glazePreviews: GlazePreviewWithUrl[] = (previewRows ?? []).map((r) => ({
+		...r,
+		url: signedUrls.get(r.storage_path) ?? ''
+	}));
+
 	const pieceWithImages: PieceWithImages = {
 		id: piece.id,
 		user_id: user.id,
@@ -70,5 +83,5 @@ export const load: PageServerLoad = async ({ params, locals: { safeGetSession } 
 		images: imagesWithUrls
 	};
 
-	return { piece: pieceWithImages, glazeInspirations };
+	return { piece: pieceWithImages, glazeInspirations, glazePreviews };
 };

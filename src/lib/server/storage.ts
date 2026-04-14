@@ -130,6 +130,10 @@ export function buildGlazeInspirationPath(userId: string, imageId: string): stri
 	return `${userId}/glaze-inspirations/${imageId}.jpg`;
 }
 
+export function buildGlazePreviewPath(userId: string, previewId: string): string {
+	return `${userId}/glaze-previews/${previewId}.jpg`;
+}
+
 export async function downloadImage(storagePath: string): Promise<Buffer> {
 	const supabase = createServiceRoleClient();
 

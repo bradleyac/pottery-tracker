@@ -2,7 +2,7 @@
 	import type { PageData } from './$types';
 	import type { GlazeInspirationWithUrl } from '$lib/types';
 	import { invalidateAll } from '$app/navigation';
-	import { formatDate } from '$lib/utils';
+	import { formatDate, resizeImageToJpeg } from '$lib/utils';
 
 	let { data } = $props<{ data: PageData }>();
 	let inspirations = $derived(data.inspirations);
@@ -24,8 +24,9 @@
 		uploading = true;
 		uploadError = null;
 		try {
+			const resized = await resizeImageToJpeg(file, 1024);
 			const formData = new FormData();
-			formData.append('image', file);
+			formData.append('image', resized);
 			const resp = await fetch('/api/glaze-inspirations', { method: 'POST', body: formData });
 			if (!resp.ok) throw new Error((await resp.text()) || 'Upload failed');
 			await invalidateAll();
