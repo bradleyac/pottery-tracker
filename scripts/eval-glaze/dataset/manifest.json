@@ -1,0 +1,10 @@
+{
+  "pairs": [
+    {
+      "id": "pair-01",
+      "piece": "pairs/pair-01/piece.jpg",
+      "glazeRef": "pairs/pair-01/glaze-ref.jpg",
+      "notes": ""
+    }
+  ]
+}
