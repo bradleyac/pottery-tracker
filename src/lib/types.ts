@@ -226,6 +226,30 @@ export interface Database {
 				};
 				Relationships: [];
 			};
+			glaze_inspirations: {
+				Row: {
+					id: string;
+					user_id: string;
+					name: string;
+					storage_path: string;
+					created_at: string;
+				};
+				Insert: {
+					id?: string;
+					user_id: string;
+					name?: string;
+					storage_path: string;
+					created_at?: string;
+				};
+				Update: {
+					id?: string;
+					user_id?: string;
+					name?: string;
+					storage_path?: string;
+					created_at?: string;
+				};
+				Relationships: [];
+			};
 		};
 		Views: Record<string, never>;
 		Functions: Record<
@@ -287,6 +311,9 @@ export type PendingUploadWithUrls = PendingUpload & {
 	matchedPieceName: string | null;
 	isStuck: boolean;
 };
+
+export type GlazeInspiration = Database['public']['Tables']['glaze_inspirations']['Row'];
+export type GlazeInspirationWithUrl = GlazeInspiration & { url: string };
 
 export type ClaudeMatchResult = {
 	matchedPieceId: string | null;

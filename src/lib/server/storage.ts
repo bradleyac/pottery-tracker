@@ -126,6 +126,10 @@ export function buildCleanImagePath(userId: string, pieceId: string, imageId: st
 	return `${userId}/${pieceId}/clean_${imageId}.jpg`;
 }
 
+export function buildGlazeInspirationPath(userId: string, imageId: string): string {
+	return `${userId}/glaze-inspirations/${imageId}.jpg`;
+}
+
 export async function downloadImage(storagePath: string): Promise<Buffer> {
 	const supabase = createServiceRoleClient();
 

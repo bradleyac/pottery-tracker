@@ -1,17 +1,19 @@
 <script lang="ts">
 	import ImageGallery from '$lib/components/ImageGallery.svelte';
+	import GlazePreviewDialog from '$lib/components/GlazePreviewDialog.svelte';
 	import type { PageData } from './$types';
 	import { formatDate } from '$lib/utils';
 	import { invalidateAll, goto } from '$app/navigation';
 
 	let { data } = $props<{ data: PageData }>();
 
-	let { piece } = $derived(data);
+	let { piece, glazeInspirations } = $derived(data);
 
 	let fileInput: HTMLInputElement;
 	let uploading = $state(false);
 	let uploadError = $state<string | null>(null);
 	let deleting = $state(false);
+	let glazePreviewOpen = $state(false);
 
 	async function handleDeleteImage(imageId: string) {
 		const resp = await fetch(`/api/images/${imageId}`, { method: 'DELETE' });
@@ -92,6 +94,11 @@
 				<button class="upload-btn" onclick={triggerFileInput} disabled={uploading || deleting}>
 					{uploading ? 'Uploading…' : '+ Add Photo'}
 				</button>
+				{#if piece.images.length > 0}
+					<button class="glaze-preview-btn" onclick={() => { glazePreviewOpen = true; }} disabled={uploading || deleting}>
+						Preview Glaze
+					</button>
+				{/if}
 				<button class="delete-piece-btn" onclick={handleDeletePiece} disabled={uploading || deleting}>
 					{deleting ? 'Deleting…' : 'Delete'}
 				</button>
@@ -142,6 +149,13 @@
 			<span>{piece.images.length} photo{piece.images.length === 1 ? '' : 's'}</span>
 		</div>
 	</div>
+
+	<GlazePreviewDialog
+		bind:open={glazePreviewOpen}
+		pieceId={piece.id}
+		images={piece.images}
+		{glazeInspirations}
+	/>
 
 	{#if piece.images.length === 0}
 		<div class="empty-images">
@@ -223,6 +237,30 @@
 	}
 
 	.upload-btn:disabled {
+		opacity: 0.65;
+		cursor: not-allowed;
+	}
+
+	.glaze-preview-btn {
+		padding: 0.625rem 1rem;
+		background: transparent;
+		color: #c0622c;
+		border: 1.5px solid #c0622c;
+		border-radius: 8px;
+		font-weight: 600;
+		font-size: 0.9375rem;
+		white-space: nowrap;
+		cursor: pointer;
+		transition:
+			background 0.15s,
+			color 0.15s;
+	}
+
+	.glaze-preview-btn:hover:not(:disabled) {
+		background: #fdf5f0;
+	}
+
+	.glaze-preview-btn:disabled {
 		opacity: 0.65;
 		cursor: not-allowed;
 	}

@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { getSignedUrls } from '$lib/server/storage';
-import type { ImageWithUrl, PieceWithImages } from '$lib/types';
+import type { ImageWithUrl, PieceWithImages, GlazeInspirationWithUrl } from '$lib/types';
 import { createServiceRoleClient } from '$lib/server/supabase';
 
 export const load: PageServerLoad = async ({ params, locals: { safeGetSession } }) => {
@@ -28,8 +28,17 @@ export const load: PageServerLoad = async ({ params, locals: { safeGetSession } 
 
 	if (imagesError) error(500, 'Failed to load images');
 
-	const storagePaths = (images ?? []).map((img) => img.storage_path);
-	const signedUrls = await getSignedUrls(storagePaths);
+	const { data: inspirationRows } = await supabase
+		.from('glaze_inspirations')
+		.select('id, user_id, name, storage_path, created_at')
+		.eq('user_id', user.id)
+		.order('created_at', { ascending: false });
+
+	const allPaths = [
+		...(images ?? []).map((img) => img.storage_path),
+		...(inspirationRows ?? []).map((r) => r.storage_path)
+	];
+	const signedUrls = await getSignedUrls(allPaths);
 
 	const imagesWithUrls: ImageWithUrl[] = (images ?? []).map((img) => ({
 		id: img.id,
@@ -41,6 +50,11 @@ export const load: PageServerLoad = async ({ params, locals: { safeGetSession } 
 		is_cover: img.is_cover,
 		embedding: img.embedding ?? null,
 		url: signedUrls.get(img.storage_path) ?? ''
+	}));
+
+	const glazeInspirations: GlazeInspirationWithUrl[] = (inspirationRows ?? []).map((r) => ({
+		...r,
+		url: signedUrls.get(r.storage_path) ?? ''
 	}));
 
 	const pieceWithImages: PieceWithImages = {
@@ -56,5 +70,5 @@ export const load: PageServerLoad = async ({ params, locals: { safeGetSession } 
 		images: imagesWithUrls
 	};
 
-	return { piece: pieceWithImages };
+	return { piece: pieceWithImages, glazeInspirations };
 };
