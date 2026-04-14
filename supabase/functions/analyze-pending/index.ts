@@ -95,6 +95,118 @@ async function callGemini(
 	return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 }
 
+// CLAHE (Contrast Limited Adaptive Histogram Equalization) on raw RGBA bitmap.
+// Matches the sharp({ width: 8, height: 8 }) call used in the SvelteKit server.
+// clipLimit == maxSlope in sharp — defaults to 3 (3× average bin count).
+function applyClahe(
+	data: Uint8Array,
+	width: number,
+	height: number,
+	tilesX: number,
+	tilesY: number,
+	clipLimit: number
+): void {
+	const BINS = 256;
+	const tileW = Math.ceil(width / tilesX);
+	const tileH = Math.ceil(height / tilesY);
+
+	// Build a CLUT (colour look-up table) for every tile.
+	const cluts: Uint8Array[][] = Array.from({ length: tilesY }, () => new Array(tilesX));
+
+	for (let ty = 0; ty < tilesY; ty++) {
+		for (let tx = 0; tx < tilesX; tx++) {
+			const x0 = tx * tileW,
+				y0 = ty * tileH;
+			const x1 = Math.min(x0 + tileW, width);
+			const y1 = Math.min(y0 + tileH, height);
+			const pixelCount = (x1 - x0) * (y1 - y0);
+
+			// Histogram over the tile (grayscale: R == G == B so just read R channel).
+			const hist = new Int32Array(BINS);
+			for (let y = y0; y < y1; y++) {
+				for (let x = x0; x < x1; x++) {
+					hist[data[(y * width + x) * 4]]++;
+				}
+			}
+
+			// Clip and redistribute excess evenly.
+			const threshold = Math.max(1, Math.round((clipLimit * pixelCount) / BINS));
+			let excess = 0;
+			for (let i = 0; i < BINS; i++) {
+				if (hist[i] > threshold) {
+					excess += hist[i] - threshold;
+					hist[i] = threshold;
+				}
+			}
+			const addPerBin = Math.floor(excess / BINS);
+			let rem = excess - addPerBin * BINS;
+			for (let i = 0; i < BINS; i++) {
+				hist[i] += addPerBin;
+				if (rem > 0) {
+					hist[i]++;
+					rem--;
+				}
+			}
+
+			// CDF → CLUT.
+			const clut = new Uint8Array(BINS);
+			let cdf = 0;
+			for (let i = 0; i < BINS; i++) {
+				cdf += hist[i];
+				clut[i] = Math.round((cdf * 255) / pixelCount);
+			}
+			cluts[ty][tx] = clut;
+		}
+	}
+
+	// Apply bilinear interpolation between the four surrounding tile CLUTs.
+	for (let y = 0; y < height; y++) {
+		for (let x = 0; x < width; x++) {
+			const idx = (y * width + x) * 4;
+			const v = data[idx];
+
+			const txF = (x + 0.5) / tileW - 0.5;
+			const tyF = (y + 0.5) / tileH - 0.5;
+			const tx0 = Math.max(0, Math.floor(txF));
+			const tx1 = Math.min(tilesX - 1, tx0 + 1);
+			const ty0 = Math.max(0, Math.floor(tyF));
+			const ty1 = Math.min(tilesY - 1, ty0 + 1);
+			const xf = Math.max(0, Math.min(1, txF - tx0));
+			const yf = Math.max(0, Math.min(1, tyF - ty0));
+
+			const out = Math.round(
+				cluts[ty0][tx0][v] * (1 - xf) * (1 - yf) +
+					cluts[ty0][tx1][v] * xf * (1 - yf) +
+					cluts[ty1][tx0][v] * (1 - xf) * yf +
+					cluts[ty1][tx1][v] * xf * yf
+			);
+			data[idx] = out;
+			data[idx + 1] = out;
+			data[idx + 2] = out;
+		}
+	}
+}
+
+// Preprocessing pipeline for image embeddings: resize512 → grayscale → CLAHE.
+// Must match preprocessForEmbedding() in src/lib/server/claude.ts.
+async function preprocessForEmbedding(imageBase64: string): Promise<string> {
+	const bytes = Uint8Array.from(atob(imageBase64), (c) => c.charCodeAt(0));
+	const img = await Jimp.fromBuffer(bytes.buffer as ArrayBuffer);
+
+	// Resize to fit within 512×512, no enlargement.
+	const scale = Math.min(512 / img.width, 512 / img.height, 1);
+	if (scale < 1) {
+		img.resize({ w: Math.round(img.width * scale), h: Math.round(img.height * scale) });
+	}
+
+	img.greyscale();
+
+	applyClahe(img.bitmap.data as unknown as Uint8Array, img.bitmap.width, img.bitmap.height, 8, 8, 3);
+
+	const buf = await img.getBuffer('image/jpeg', { quality: 82 });
+	return btoa(String.fromCharCode(...new Uint8Array(buf)));
+}
+
 async function generateEmbedding(apiKey: string, imageBase64: string): Promise<number[]> {
 	const resp = await fetch(`${GEMINI_API_BASE}/${EMBEDDING_MODEL}:embedContent?key=${apiKey}`, {
 		method: 'POST',
@@ -299,7 +411,8 @@ Deno.serve(async (req: Request) => {
 		};
 
 		const strategy = new ThumbnailStrategy(denoIO);
-		const embedding = await generateEmbedding(geminiKey, cleanImageBase64);
+		const embeddingInput = await preprocessForEmbedding(cleanImageBase64);
+		const embedding = await generateEmbedding(geminiKey, embeddingInput);
 
 		let result: MatchResult;
 
