@@ -2,51 +2,33 @@ import { createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 
-// ── Glaze description cache ───────────────────────────────────────────────────
-// Keyed on sha256(imageBuffer) + promptConfigName → stores text string.
-
-export class GlazeDescriptionCache {
-	constructor(private cacheDir: string) {}
-
-	private keyPath(imageBuffer: Buffer, promptName: string): string {
-		const hash = createHash('sha256').update(imageBuffer).digest('hex');
-		return join(this.cacheDir, 'glaze-descriptions', `${hash}-${promptName}.txt`);
-	}
-
-	async get(imageBuffer: Buffer, promptName: string): Promise<string | null> {
-		try {
-			return await readFile(this.keyPath(imageBuffer, promptName), 'utf-8');
-		} catch {
-			return null;
-		}
-	}
-
-	async set(imageBuffer: Buffer, promptName: string, description: string): Promise<void> {
-		const path = this.keyPath(imageBuffer, promptName);
-		await mkdir(dirname(path), { recursive: true });
-		await writeFile(path, description, 'utf-8');
-	}
-}
-
 // ── Generated image cache ─────────────────────────────────────────────────────
-// Keyed on sha256(pieceBuffer) + sha256(glazeDescription) + modelName → JPEG buffer.
+// Keyed on sha256(pieceBuffer) + sha256(glazeRefBuffer) + sha256(prompt) + modelName.
+// The prompt and ref hashes use 16 hex chars each to keep filenames short.
 
 export class GlazeImageCache {
 	constructor(private cacheDir: string) {}
 
-	private keyPath(pieceBuffer: Buffer, glazeDescription: string, modelName: string): string {
+	private keyPath(
+		pieceBuffer: Buffer,
+		glazeRefBuffer: Buffer,
+		prompt: string,
+		modelName: string
+	): string {
 		const pieceHash = createHash('sha256').update(pieceBuffer).digest('hex');
-		const descHash = createHash('sha256').update(glazeDescription).digest('hex');
-		return join(this.cacheDir, 'glaze-images', `${pieceHash}-${descHash}-${modelName}.jpg`);
+		const refHash = createHash('sha256').update(glazeRefBuffer).digest('hex').slice(0, 16);
+		const promptHash = createHash('sha256').update(prompt).digest('hex').slice(0, 16);
+		return join(this.cacheDir, 'glaze-images', `${pieceHash}-${refHash}-${promptHash}-${modelName}.jpg`);
 	}
 
 	async get(
 		pieceBuffer: Buffer,
-		glazeDescription: string,
+		glazeRefBuffer: Buffer,
+		prompt: string,
 		modelName: string
 	): Promise<Buffer | null> {
 		try {
-			return await readFile(this.keyPath(pieceBuffer, glazeDescription, modelName));
+			return await readFile(this.keyPath(pieceBuffer, glazeRefBuffer, prompt, modelName));
 		} catch {
 			return null;
 		}
@@ -54,11 +36,12 @@ export class GlazeImageCache {
 
 	async set(
 		pieceBuffer: Buffer,
-		glazeDescription: string,
+		glazeRefBuffer: Buffer,
+		prompt: string,
 		modelName: string,
 		imageBuffer: Buffer
 	): Promise<void> {
-		const path = this.keyPath(pieceBuffer, glazeDescription, modelName);
+		const path = this.keyPath(pieceBuffer, glazeRefBuffer, prompt, modelName);
 		await mkdir(dirname(path), { recursive: true });
 		await writeFile(path, imageBuffer);
 	}

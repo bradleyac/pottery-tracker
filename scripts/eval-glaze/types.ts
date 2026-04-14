@@ -13,26 +13,35 @@ export interface Manifest {
 
 // ── Pipeline configs ──────────────────────────────────────────────────────────
 
-export interface GeminiPromptConfig {
+/** A named prompt variant for the flux-2-dev generation call. */
+export interface PromptConfig {
 	name: string;
-	systemInstruction?: string;
-	userPrompt: string;
+	prompt: string;
 }
 
 export interface ReplicateModelConfig {
 	name: string;
-	/** e.g. 'black-forest-labs/flux-kontext-pro' */
+	/** e.g. 'black-forest-labs/flux-2-dev' */
 	model: string;
-	buildInput(pieceBase64: string, glazeDescription: string): Record<string, unknown>;
+	/**
+	 * Build the Replicate prediction input.
+	 * @param pieceBase64    - Base64 JPEG of the unglazed piece
+	 * @param glazeRefBase64 - Base64 JPEG of the glaze reference image
+	 * @param prompt         - The prompt text to use for this run
+	 */
+	buildInput(
+		pieceBase64: string,
+		glazeRefBase64: string,
+		prompt: string
+	): Record<string, unknown>;
 }
 
 // ── Results ──────────────────────────────────────────────────────────────────
 
 export interface EvalResult {
 	pairId: string;
-	geminiConfig: string;
+	promptConfig: string;
 	replicateConfig: string;
-	glazeDescription: string;
 	outputImagePath: string;
 	durationMs: number;
 	error?: string;

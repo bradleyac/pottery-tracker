@@ -1,30 +1,20 @@
 import type { ReplicateModelConfig } from './types.ts';
 
-const GLAZE_PROMPT_PREFIX =
-	'Apply the following glaze to the surface of this pottery piece, preserving its exact shape, proportions, surface texture, and any decorative elements — only change the surface color and finish: ';
-
-/**
- * Named Replicate model configs for image generation.
- * Each config specifies the model and how to build the API input payload.
- */
 export const REPLICATE_MODELS: ReplicateModelConfig[] = [
 	{
-		name: 'flux-kontext-pro',
-		model: 'black-forest-labs/flux-kontext-pro',
-		buildInput(pieceBase64, glazeDescription) {
+		name: 'flux-2-dev',
+		model: 'black-forest-labs/flux-2-dev',
+		buildInput(pieceBase64, glazeRefBase64, prompt) {
 			return {
-				prompt: GLAZE_PROMPT_PREFIX + glazeDescription,
-				input_image: `data:image/jpeg;base64,${pieceBase64}`
-			};
-		}
-	},
-	{
-		name: 'flux-kontext-dev',
-		model: 'black-forest-labs/flux-kontext-dev',
-		buildInput(pieceBase64, glazeDescription) {
-			return {
-				prompt: GLAZE_PROMPT_PREFIX + glazeDescription,
-				input_image: `data:image/jpeg;base64,${pieceBase64}`
+				prompt,
+				input_images: [
+					`data:image/jpeg;base64,${pieceBase64}`,
+					`data:image/jpeg;base64,${glazeRefBase64}`
+				],
+				aspect_ratio: 'match_input_image',
+				output_format: 'jpg',
+				output_quality: 90,
+				go_fast: false
 			};
 		}
 	}
@@ -36,7 +26,7 @@ export function getReplicateModels(names?: string[]): ReplicateModelConfig[] {
 		const found = REPLICATE_MODELS.find((m) => m.name === name);
 		if (!found) {
 			console.error(
-				`Unknown Replicate model: "${name}". Available: ${REPLICATE_MODELS.map((m) => m.name).join(', ')}`
+				`Unknown model: "${name}". Available: ${REPLICATE_MODELS.map((m) => m.name).join(', ')}`
 			);
 			process.exit(1);
 		}
@@ -45,20 +35,19 @@ export function getReplicateModels(names?: string[]): ReplicateModelConfig[] {
 }
 
 /**
- * Call Replicate to generate a glazed image.
- * Uses the models/{owner}/{name}/predictions endpoint (no version hash needed).
- * Polls until the prediction succeeds or fails (max ~120s).
- * Returns the output image as a Buffer.
+ * Run a Replicate prediction and return the output as a Buffer.
+ * Uses the /models/{owner}/{name}/predictions endpoint (no version hash needed).
+ * Polls until succeeded or failed (max 120 s).
  */
 export async function runReplicatePrediction(
 	modelConfig: ReplicateModelConfig,
 	pieceBase64: string,
-	glazeDescription: string,
+	glazeRefBase64: string,
+	prompt: string,
 	apiToken: string
 ): Promise<Buffer> {
-	const input = modelConfig.buildInput(pieceBase64, glazeDescription);
+	const input = modelConfig.buildInput(pieceBase64, glazeRefBase64, prompt);
 
-	// Start prediction
 	const createResp = await fetch(
 		`https://api.replicate.com/v1/models/${modelConfig.model}/predictions`,
 		{
@@ -79,7 +68,6 @@ export async function runReplicatePrediction(
 
 	let prediction = await createResp.json();
 
-	// Poll until done
 	const deadline = Date.now() + 120_000;
 	while (
 		prediction.status !== 'succeeded' &&
