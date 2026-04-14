@@ -197,4 +197,14 @@ export const DEFAULT_PIPELINES: PreprocessingPipeline[] = [
 	buildPipeline('bbox-square1024+gs+norm', ['bbox-crop', 'square1024', 'grayscale', 'normalize']),
 	buildPipeline('bbox-square512+gs+clahe', ['bbox-crop', 'square512', 'grayscale', 'clahe']),
 	buildPipeline('bbox-square1024+gs+clahe', ['bbox-crop', 'square1024', 'grayscale', 'clahe']),
+
+	buildPipeline('bbox512', ['bbox-crop', 'resize512']),
+	buildPipeline('bbox1024', ['bbox-crop', 'resize1024']),
+
+	buildPipeline('bbox-gray-clahe512', ['bbox-crop', 'resize512', 'grayscale', 'clahe']),
 ];
+
+// Pipeline                      Embedder     R@1     R@3     R@5     R@8     MRR     
+// ───────────────────────────────────────────────────────────────────────────────────
+// gray-norm512+bgr              gemini-768d  0.39    0.78    0.86    0.97    0.89    
+// gray-clahe512+bgr             gemini-768d  0.48    0.84    0.88    0.95    0.96  
