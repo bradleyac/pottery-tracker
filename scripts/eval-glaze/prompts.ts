@@ -6,23 +6,14 @@ import type { PromptConfig } from './types.ts';
  */
 export const PROMPTS: PromptConfig[] = [
 	{
-		name: 'v1-simple',
-		prompt: 'Apply the glaze from the second image to the pottery piece in the first image.'
+		name: 'v5-color-only',
+		prompt:
+			'The second image is used only as a color and finish reference — extract only its glaze color, opacity, and surface sheen. Apply that glaze to the pottery piece in the first image. Do not transfer any form, decoration, carving, cutout, or surface texture from the second image. The output piece must be identical in shape and surface detail to the first image; only the glaze color changes.'
 	},
 	{
-		name: 'v2-preserve',
+		name: 'v6-explicit-separation',
 		prompt:
-			'Apply the glaze from the second image to the pottery piece in the first image. Preserve the exact shape, proportions, surface texture, and any decorative elements of the piece — only the surface color and finish should change.'
-	},
-	{
-		name: 'v3-stages',
-		prompt:
-			'The first image shows an unglazed pottery piece. The second image shows a glazed pottery piece with a specific glaze finish. Transform the first piece so it appears glazed with the same glaze as shown in the second image. Keep the shape, size, and all physical features of the first piece identical.'
-	},
-	{
-		name: 'v4-style',
-		prompt:
-			'Using the second image as a glaze style reference, show what the pottery piece from the first image would look like after being dipped in and fired with that glaze. Maintain the original piece\'s form exactly.'
+			'Image 1: an unglazed pottery piece — its shape and all surface details (carving, texture, decoration) must appear unchanged in the output. Image 2: a glazed piece used as a color reference only — ignore its shape, ignore its decoration, ignore its surface texture; extract only the color, tone, and glossiness of the glaze. Output: the piece from Image 1 with only the glaze color and finish from Image 2 applied.'
 	}
 ];
 
