@@ -6,14 +6,19 @@ import type { PromptConfig } from './types.ts';
  */
 export const PROMPTS: PromptConfig[] = [
 	{
-		name: 'v5-color-only',
+		name: 'v7-swatch',
 		prompt:
-			'The second image is used only as a color and finish reference — extract only its glaze color, opacity, and surface sheen. Apply that glaze to the pottery piece in the first image. Do not transfer any form, decoration, carving, cutout, or surface texture from the second image. The output piece must be identical in shape and surface detail to the first image; only the glaze color changes.'
+			'The first image is the pottery piece to transform. The second image is a glaze color swatch — not a pottery piece, just a color and finish reference. Apply the exact color, opacity, and surface sheen from the swatch to every surface of the first piece. Apply it evenly — no pooling, no drips, no accumulation in crevices. Do not modify the first piece\'s shape, holes, cutouts, carving, or surface decoration in any way.'
 	},
 	{
-		name: 'v6-explicit-separation',
+		name: 'v8-recolor',
 		prompt:
-			'Image 1: an unglazed pottery piece — its shape and all surface details (carving, texture, decoration) must appear unchanged in the output. Image 2: a glazed piece used as a color reference only — ignore its shape, ignore its decoration, ignore its surface texture; extract only the color, tone, and glossiness of the glaze. Output: the piece from Image 1 with only the glaze color and finish from Image 2 applied.'
+			'Recolor the pottery piece in the first image. Use the second image only to extract the target glaze color, tone, and glossiness — ignore everything else about it. Match the hue, saturation, and surface finish precisely and apply it uniformly across the piece. The first piece\'s form — including any holes, openings, carving, and surface texture — must remain pixel-perfect unchanged. No pooling, drips, or uneven glaze buildup.'
+	},
+	{
+		name: 'v9-prohibition-first',
+		prompt:
+			'Do not change the shape, holes, cutouts, carving, texture, or any physical feature of the pottery piece in the first image. Do not copy any feature from the second image except its glaze color and surface finish. Apply that color evenly and uniformly — no pooling or drips. The only difference between the input and output should be the surface color and glossiness.'
 	}
 ];
 
