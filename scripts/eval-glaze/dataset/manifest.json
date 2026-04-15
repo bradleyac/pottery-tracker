@@ -5,6 +5,18 @@
       "piece": "pairs/pair-01/piece.jpg",
       "glazeRef": "pairs/pair-01/glaze-ref.jpg",
       "notes": ""
+    },
+    {
+      "id": "pair-02",
+      "piece": "pairs/pair-02/piece.jpg",
+      "glazeRef": "pairs/pair-02/glaze-ref.jpg",
+      "notes": ""
+    },
+    {
+      "id": "pair-03",
+      "piece": "pairs/pair-03/piece.jpg",
+      "glazeRef": "pairs/pair-03/glaze-ref.jpg",
+      "notes": ""
     }
   ]
 }
