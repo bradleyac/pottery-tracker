@@ -6,19 +6,28 @@ import type { PromptConfig } from './types.ts';
  */
 export const PROMPTS: PromptConfig[] = [
 	{
-		name: 'v7-swatch',
-		prompt:
-			'The first image is the pottery piece to transform. The second image is a glaze color swatch — not a pottery piece, just a color and finish reference. Apply the exact color, opacity, and surface sheen from the swatch to every surface of the first piece. Apply it evenly — no pooling, no drips, no accumulation in crevices. Do not modify the first piece\'s shape, holes, cutouts, carving, or surface decoration in any way.'
-	},
-	{
-		name: 'v8-recolor',
-		prompt:
-			'Recolor the pottery piece in the first image. Use the second image only to extract the target glaze color, tone, and glossiness — ignore everything else about it. Match the hue, saturation, and surface finish precisely and apply it uniformly across the piece. The first piece\'s form — including any holes, openings, carving, and surface texture — must remain pixel-perfect unchanged. No pooling, drips, or uneven glaze buildup.'
-	},
-	{
-		name: 'v9-prohibition-first',
-		prompt:
-			'Do not change the shape, holes, cutouts, carving, texture, or any physical feature of the pottery piece in the first image. Do not copy any feature from the second image except its glaze color and surface finish. Apply that color evenly and uniformly — no pooling or drips. The only difference between the input and output should be the surface color and glossiness.'
+		name: 'v13-detailed-instructions',
+		prompt: `When an unfired pottery piece is glazed and then fired, it changes in the following ways: 
+		Color - The piece takes on the color of the glaze, which can vary based on thickness of application; 
+		Sheen - The piece becomes shiny, because it has been covered in a ~1mm layer of glass; 
+		Surface Texture - The piece becomes smoother compared to the rough texture of unfired or bisque-fired clay, because it has been covered in a ~1mm layer of glass. 
+		
+		A layer of glaze will NOT change the contours of a piece:
+		Any visible contours of the unfired piece on a scale greater than ~1mm WILL remain visible after glazing. 
+		The glaze will only add a thin layer of glass on top of the piece, which can change the color, sheen, and surface texture, but NOT the contours of the piece itself.
+
+		A layer of glaze will NOT remove features from a piece:
+		Assume that the features of the unfired piece are permanent and will not be removed by the glaze. Only the color, sheen, and surface texture of the glaze itself.
+
+		A layer of glaze will NOT change the nature of decorations or lack thereof on the piece: 
+		If copying a glaze from a piece with holes in it, copying the glaze should not copy the holes, only the color, sheen, and surface texture of the glaze itself. 
+
+		A layer of glaze will NOT change the form of the piece: 
+		If copying a glaze from a bowl onto a candle-holder, the candle-holder should not end up looking like a bowl--it should keep its form and overall shape and only change the color, sheen and surface texture of the glaze itself. 
+		
+		The first image is an unfired pottery piece. The second image is a glazed pottery piece. 
+		Your task, in order to generate a preview image of the first piece with the glaze applied from the second, is to apply the glaze from the second image to the pottery piece in the first image, WITHOUT transferring any decorations. 
+		The transferred glaze MUST be applied evenly across the surface of the piece WITHOUT any pooling, dripping, or ripples.`
 	}
 ];
 

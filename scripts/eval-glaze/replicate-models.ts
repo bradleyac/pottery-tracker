@@ -3,7 +3,7 @@ import type { ReplicateModelConfig } from './types.ts';
 export const REPLICATE_MODELS: ReplicateModelConfig[] = [
 	{
 		name: 'flux-2-dev',
-		model: 'black-forest-labs/flux-2-dev',
+		model: 'black-forest-labs/flux-2-pro',
 		buildInput(pieceBase64, glazeRefBase64, prompt) {
 			return {
 				prompt,

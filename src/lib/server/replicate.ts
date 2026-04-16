@@ -4,7 +4,28 @@ import sharp from 'sharp';
 const DEFAULT_GLAZE_MODEL = 'black-forest-labs/flux-2-pro';
 
 const GLAZE_PROMPT =
-	'Apply the glaze from the second image to the pottery piece in the first image. Preserve the exact shape, proportions, surface texture, and any decorative elements of the piece — only the surface color and finish should change.';
+	`When an unfired pottery piece is glazed and then fired, it changes in the following ways: 
+		Color - The piece takes on the color of the glaze, which can vary based on thickness of application; 
+		Sheen - The piece becomes shiny, because it has been covered in a ~1mm layer of glass; 
+		Surface Texture - The piece becomes smoother compared to the rough texture of unfired or bisque-fired clay, because it has been covered in a ~1mm layer of glass. 
+		
+		A layer of glaze will NOT change the contours of a piece:
+		Any visible contours of the unfired piece on a scale greater than ~1mm WILL remain visible after glazing. 
+		The glaze will only add a thin layer of glass on top of the piece, which can change the color, sheen, and surface texture, but NOT the contours of the piece itself.
+
+		A layer of glaze will NOT remove features from a piece:
+		Assume that the features of the unfired piece are permanent and will not be removed by the glaze. Only the color, sheen, and surface texture of the glaze itself.
+
+		A layer of glaze will NOT change the nature of decorations or lack thereof on the piece: 
+		If copying a glaze from a piece with holes in it, copying the glaze should not copy the holes, only the color, sheen, and surface texture of the glaze itself. 
+
+		A layer of glaze will NOT change the form of the piece: 
+		If copying a glaze from a bowl onto a candle-holder, the candle-holder should not end up looking like a bowl--it should keep its form and overall shape and only change the color, sheen and surface texture of the glaze itself. 
+		
+		The first image is an unfired pottery piece. The second image is a glazed pottery piece. 
+		Your task is to generate a preview image of the first piece with the glaze from the second piece applied to it.
+		To do this, you must apply the glaze from the second image to the pottery piece in the first image, WITHOUT transferring any decorations. 
+		The transferred glaze MUST be applied evenly across the surface of the piece WITHOUT any pooling, dripping, or ripples.`;
 
 async function resizeForReplicate(buffer: Buffer): Promise<string> {
 	const resized = await sharp(buffer)
