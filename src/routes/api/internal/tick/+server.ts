@@ -32,11 +32,25 @@ export const POST: RequestHandler = async ({ request }) => {
 	const edgeFunctionUrl = `${PUBLIC_SUPABASE_URL}/functions/v1/analyze-pending`;
 
 	// ─── Sweep A: release expired analyze leases ─────────────────────────────
-	await supabase
+	// Guard the UPDATE behind an existence probe — when the queue is idle (the
+	// common case) this skips the write entirely, avoiding WAL churn that was
+	// burning the disk IO budget.
+	const expiredAnalyzeCutoff = new Date(Date.now() - ANALYZE_LEASE_MINUTES * 60_000).toISOString();
+	const { data: expiredAnalyzeProbe } = await supabase
 		.from('pending_uploads')
-		.update({ analyze_locked_at: null })
-		.lt('analyze_locked_at', new Date(Date.now() - ANALYZE_LEASE_MINUTES * 60_000).toISOString())
-		.not('analyze_locked_at', 'is', null);
+		.select('id')
+		.lt('analyze_locked_at', expiredAnalyzeCutoff)
+		.not('analyze_locked_at', 'is', null)
+		.limit(1)
+		.maybeSingle();
+
+	if (expiredAnalyzeProbe) {
+		await supabase
+			.from('pending_uploads')
+			.update({ analyze_locked_at: null })
+			.lt('analyze_locked_at', expiredAnalyzeCutoff)
+			.not('analyze_locked_at', 'is', null);
+	}
 
 	// ─── Sweep B: re-trigger eligible analyze rows ────────────────────────────
 	const eligibleStatuses: PendingUploadStatus[] = ['queued', 'preprocessing', 'analyzing'];
@@ -80,8 +94,7 @@ export const POST: RequestHandler = async ({ request }) => {
 					signal: AbortSignal.timeout(90_000)
 				})
 					.then((r) => {
-						if (!r.ok)
-							console.error(`[tick] edge function returned ${r.status} for ${row.id}`);
+						if (!r.ok) console.error(`[tick] edge function returned ${r.status} for ${row.id}`);
 					})
 					.catch((err: unknown) =>
 						console.error(`[tick] analyze-pending trigger failed for ${row.id}:`, err)
@@ -91,15 +104,26 @@ export const POST: RequestHandler = async ({ request }) => {
 	}
 
 	// ─── Sweep C: release expired consolidate leases & advance batches ────────
-	await supabase
+	const expiredConsolidateCutoff = new Date(
+		Date.now() - CONSOLIDATE_LEASE_MINUTES * 60_000
+	).toISOString();
+	const { data: expiredConsolidateProbe } = await supabase
 		.from('pending_batches')
-		.update({ consolidate_locked_at: null })
-		.lt(
-			'consolidate_locked_at',
-			new Date(Date.now() - CONSOLIDATE_LEASE_MINUTES * 60_000).toISOString()
-		)
+		.select('batch_id')
+		.lt('consolidate_locked_at', expiredConsolidateCutoff)
 		.not('consolidate_locked_at', 'is', null)
-		.is('consolidated_at', null);
+		.is('consolidated_at', null)
+		.limit(1)
+		.maybeSingle();
+
+	if (expiredConsolidateProbe) {
+		await supabase
+			.from('pending_batches')
+			.update({ consolidate_locked_at: null })
+			.lt('consolidate_locked_at', expiredConsolidateCutoff)
+			.not('consolidate_locked_at', 'is', null)
+			.is('consolidated_at', null);
+	}
 
 	const { data: batchRows } = await supabase
 		.from('pending_batches')
@@ -143,7 +167,8 @@ export const POST: RequestHandler = async ({ request }) => {
 						.update({
 							status: 'failed',
 							analyze_locked_at: null,
-							analyze_last_error: 'Timed out waiting for analysis to complete (batch deadline exceeded)'
+							analyze_last_error:
+								'Timed out waiting for analysis to complete (batch deadline exceeded)'
 						})
 						.in('id', stuckIds);
 				}
@@ -238,17 +263,29 @@ export const POST: RequestHandler = async ({ request }) => {
 	// Nudge: also force-fail stuck in-progress rows older than the deadline
 	// (belt-and-suspenders for statuses that aren't 'queued'/'preprocessing'/'analyzing')
 	const stuckDeadline = new Date(Date.now() - BATCH_DEADLINE_MINUTES * 60_000).toISOString();
-	await supabase
+	const { data: stuckProbe } = await supabase
 		.from('pending_uploads')
-		.update({
-			status: 'failed',
-			analyze_locked_at: null,
-			analyze_last_error: 'Timed out: upload was stuck in-progress past the batch deadline'
-		})
+		.select('id')
 		.in('status', IN_PROGRESS_STATUSES)
-		.lt('analyze_attempts', MAX_ANALYZE_ATTEMPTS) // only if not already retried to max
+		.lt('analyze_attempts', MAX_ANALYZE_ATTEMPTS)
 		.lt('created_at', stuckDeadline)
-		.not('batch_id', 'is', null); // only batch members — solo uploads have their own retry
+		.not('batch_id', 'is', null)
+		.limit(1)
+		.maybeSingle();
+
+	if (stuckProbe) {
+		await supabase
+			.from('pending_uploads')
+			.update({
+				status: 'failed',
+				analyze_locked_at: null,
+				analyze_last_error: 'Timed out: upload was stuck in-progress past the batch deadline'
+			})
+			.in('status', IN_PROGRESS_STATUSES)
+			.lt('analyze_attempts', MAX_ANALYZE_ATTEMPTS)
+			.lt('created_at', stuckDeadline)
+			.not('batch_id', 'is', null);
+	}
 
 	// Await all edge function triggers in parallel — ensures requests are fully sent
 	// before Vercel freezes the serverless process after the response.
